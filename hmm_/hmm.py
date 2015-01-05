@@ -1,5 +1,5 @@
 import numpy as np
-
+from scipy import stats
 from hmm_.hmm_exception import *
 
 
@@ -31,18 +31,36 @@ class HMMModel():
         self.a = np.array(a)
         self.b = np.array(b)
         self.pi = np.array(pi)
-        self.n, self.m = self.a.shape
+        self.n, self.m = self.b.shape
         self.check()
 
     def check(self, eps=1e-10):
         if self.a.shape != (len(self.pi), self.b.shape[0]):
-            raise HMMIndexError("wrong model's shape")
+            raise HMMException("wrong model's shape")
         if abs(self.a.sum(axis=1) - np.ones(len(self.a))).max() > eps:
-            raise HMMValueError("a.sum(axis=1) is not unit vector")
+            raise HMMException("a.sum(axis=1) is not unit vector")
         if abs(self.b.sum(axis=1) - np.ones(len(self.a))).max() > eps:
-            raise HMMValueError("b.sum(axis=1) is not unit vector")
+            raise HMMException("b.sum(axis=1) is not unit vector")
         if abs(sum(self.pi) - np.ones(len(self.a))).max() > eps:
-            raise HMMValueError("sum(pi) must equal 1")
+            raise HMMException("sum(pi) must equal 1")
+
+    def sample(self, size):
+        hidden_states = np.arange(self.n)
+        states = np.arange(self.m)
+        sample = np.zeros(size, dtype=np.int)
+        p = self.pi
+        for i in range(size):
+            h_state = stats.rv_discrete(name='custm',
+                                        values=(hidden_states, p)).rvs()
+            sample[i] = stats.rv_discrete(name='custm',
+                                          values=(states, self.b[h_state])).rvs()
+            p = self.a[h_state]
+        return sample
+
+    def distance(self, model):
+        return np.mean([abs(self.a - model.a).mean(),
+                       abs(self.b - model.b).mean(),
+                       abs(self.pi - model.pi).mean()])
 
     def __str__(self):
         return "a: {}\n" \
@@ -99,10 +117,9 @@ class HMM():
         psi = np.array(psi)
         q = np.zeros(T)
         q[T-1] = delta_t.argmax()
-        for i in range(2, T):
+        for i in range(2, T+1):
             q[-i] = psi[-i+1][q[-i + 1]]
-        q[0] = model.pi.argmax()
-        return q.astype("int32")
+        return q.astype(np.int)
 
     def _optimal_model(self, data, start_model=None, eps=1e-30, max_iter=1e5):
         """
