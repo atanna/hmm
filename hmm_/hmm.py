@@ -1,6 +1,8 @@
 import numpy as np
 from scipy import stats
 from hmm_.hmm_exception import *
+from numpy import array
+from scipy.misc import logsumexp
 
 
 """
@@ -11,38 +13,41 @@ http://logic.pdmi.ras.ru/~sergey/teaching/asr/notes-09-hmm.pdf
 
 
 class HMMModel():
-    def __init__(self, a, b, pi):
-        """
+    """
         let x_0 ... x_(n-1) - hidden states
             y_0 ... y_(m-1) - alphabet for observation data
             q_0 ... g_(T-1) - current hidden states
-        :param a:
-        shape = (n,n)
-        a[i,j] = p(q_(t+1)=x_j| q_t=x_i)
-        :param b:
-        shape = (n,m)
-        b[j,k] = p(y_k| x_j)
-        :param pi:
-        shape = (n,)
-        pi_j = p(q_0=x_j)
-        :return:
-        """
+        a: shape (n,n), transition matrix for hidden states
+        a[i,j] = log_p(q_(t+1)=x_j| q_t=x_i)
+        b: shape (n,m), log_probability hidden_state -> state
+        b[j,k] = log_p(y_k| x_j)
+        pi: shape (n,), start log_probabilities for hidden states
+        pi_j = log_p(q_0=x_j)
+    """
 
-        self.a = np.array(a)
-        self.b = np.array(b)
-        self.pi = np.array(pi)
-        self.n, self.m = self.b.shape
-        self.check()
+    @staticmethod
+    def get_model_from_real_prob(a, b, pi):
+        return HMMModel.get_model(np.log(a), np.log(b), np.log(pi))
+
+    @staticmethod
+    def get_model(a, b, pi):
+        model = HMMModel()
+        model.a, model.b, model.pi = array(a), array(b), array(pi)
+        model.n, model.m = model.b.shape
+        model.check()
+        return model
 
     def check(self, eps=1e-10):
         if self.a.shape != (len(self.pi), self.b.shape[0]):
             raise HMMException("wrong model's shape")
-        if abs(self.a.sum(axis=1) - np.ones(len(self.a))).max() > eps:
-            raise HMMException("a.sum(axis=1) is not unit vector")
-        if abs(self.b.sum(axis=1) - np.ones(len(self.a))).max() > eps:
-            raise HMMException("b.sum(axis=1) is not unit vector")
-        if abs(sum(self.pi) - np.ones(len(self.a))).max() > eps:
-            raise HMMException("sum(pi) must equal 1")
+        if abs(np.exp(logsumexp(self.a, axis=1)) - np.ones(
+                len(self.a))).max() > eps:
+            raise HMMException("exp_a.sum(axis=1) is not unit vector")
+        if abs(np.exp(logsumexp(self.b, axis=1)) - np.ones(
+                len(self.a))).max() > eps:
+            raise HMMException("exp_b.sum(axis=1) is not unit vector")
+        if abs(np.exp(logsumexp(self.pi)) - np.ones(len(self.a))).max() > eps:
+            raise HMMException("exp_sum(pi) must equal 1")
 
     def sample(self, size):
         hidden_states = np.arange(self.n)
@@ -51,21 +56,24 @@ class HMMModel():
         p = self.pi
         for i in range(size):
             h_state = stats.rv_discrete(name='custm',
-                                        values=(hidden_states, p)).rvs()
+                                        values=(hidden_states,
+                                                np.exp(p))).rvs()
             sample[i] = stats.rv_discrete(name='custm',
-                                          values=(
-                                          states, self.b[h_state])).rvs()
+                                          values=(states,
+                                                  np.exp(
+                                                      self.b[h_state]))).rvs()
             p = self.a[h_state]
         return sample
 
     def distance(self, model):
-        return np.mean([abs(self.a - model.a).mean(),
-                        abs(self.b - model.b).mean()])
+        return np.max([abs(self.a - model.a).max(),
+                       abs(self.b - model.b).max()])
 
     def __str__(self):
         return "a: {}\n" \
                "b: {}\n" \
-               "pi: {}\n".format(self.a, self.b, self.pi)
+               "pi: {}\n".format(np.exp(self.a), np.exp(self.b),
+                                 np.exp(self.pi))
 
 
 class HMM():
@@ -76,14 +84,14 @@ class HMM():
         self.n = n
 
     @staticmethod
-    def observation_probability(model, data):
+    def observation_log_probability(model, data):
         """
         :param model:
         :param data:
         :return: p(data| model)
 
         """
-        return HMM.forward(model, data)[-1].sum()
+        return logsumexp(HMM.forward(model, data)[-1])
 
     @staticmethod
     def optimal_state_sequence(model, data):
@@ -99,13 +107,13 @@ class HMM():
         :return: optimal q_1 ... q_T
         """
 
-        delta_t = model.pi * model.b[:, data[0]]
+        delta_t = model.pi + model.b[:, data[0]]
         psi = []
 
         for d in data[1:]:
-            tmp = delta_t[:, np.newaxis] * model.a
+            tmp = delta_t[:, np.newaxis] + model.a
             psi.append(tmp.argmax(axis=0))
-            delta_t = tmp.max(axis=0) * model.b[:, d]
+            delta_t = tmp.max(axis=0) + model.b[:, d]
 
         T = len(data)
         psi = np.array(psi)
@@ -128,9 +136,10 @@ class HMM():
         T = len(data)
         alpha = np.zeros((T, model.n))
 
-        alpha[0] = model.pi * model.b[:, data[0]]
+        alpha[0] = model.pi + model.b[:, data[0]]
         for t in range(1, T):
-            alpha[t] = alpha[t - 1].dot(model.a) * (model.b[:, data[t]])
+            alpha[t] = logsumexp(alpha[t - 1] + model.a.T, axis=1) + \
+                       model.b[:, data[t]]
         return alpha
 
     @staticmethod
@@ -145,12 +154,14 @@ class HMM():
         """
         T = len(data)
         beta = np.zeros((T, model.n))
-        beta[T - 1] = 1.
+        beta[T - 1] = np.log(1.)
         for t in range(T - 2, -1, -1):
-            beta[t] = model.a.dot(model.b[:, data[t + 1]] * beta[t + 1])
+            beta[t] = logsumexp(
+                model.a + (model.b[:, data[t + 1]] + beta[t + 1]), axis=1)
         return beta
 
-    def _optimal_model(self, data, start_model=None, eps=1e-30, max_iter=1e5):
+    def _optimal_model(self, data, start_model=None, m=None, eps=1e-30,
+                       max_iter=1e5):
         """
         Baum-Welch algorithm
         p(data| model) ->_model max
@@ -163,32 +174,41 @@ class HMM():
             """
             additional values: ksi, gamma
             ksi_t[i,j] = p(q_t=x_i, q_(t+1)=x_j|data, model)
-            gamma = p(q_t = x_i| D, alpha)
+            gamma[t,i] = p(q_t = x_i|data, modal)
             :param alpha:
             :param beta:
             :return:
             """
-            a = np.zeros((n, n))
-            b = np.zeros((n, m))
-            gamma = np.zeros((T, n))
+            a = np.log(np.zeros((n, n)))
+            b = np.log(np.zeros((n, m)))
+            gamma = np.log(np.zeros((T, n)))
 
-            p = alpha[-1].sum()
+            p = logsumexp(alpha[-1])
+            eps_check = 1e-9
             for t in range(T - 1):
-                ksi_t = alpha[t][:, np.newaxis] * model.a \
-                        * model.b[:, data[t + 1]] * beta[t + 1] / p
-                gamma[t] = ksi_t.sum(axis=1)
+                ksi_t = alpha[t][:, np.newaxis] + model.a \
+                        + model.b[:, data[t + 1]] + beta[t + 1] - p
+                gamma[t] = logsumexp(ksi_t, axis=1)
 
-                a += ksi_t
-                b[:, data[t]] += gamma[t]
+                a = logsumexp([a, ksi_t], axis=0)
+                b[:, data[t]] = logsumexp([b[:, data[t]], gamma[t]], axis=0)
 
-            sum_gamma = gamma.sum(axis=0)[:, np.newaxis]
-            a /= sum_gamma
-            b /= sum_gamma
+                assert abs(np.exp(logsumexp(alpha[t] + beta[t])) -
+                           np.exp(p)) < eps_check, \
+                    "{} != {}".format(logsumexp(alpha[t] + beta[t]), p)
+                assert abs(np.exp(logsumexp(gamma[t])) - 1.) < eps_check, \
+                    "{} != 1.".format(np.exp(logsumexp(gamma[t])))
+
+            sum_gamma = logsumexp(gamma, axis=0)[:, np.newaxis]
+            a -= sum_gamma
+            b -= sum_gamma
             pi = gamma[0]
 
-            return HMMModel(a, b, pi), gamma
+            return HMMModel.get_model(a, b, pi), gamma
 
-        n, m, T = self.n, len(set(data)), len(data)
+        n, T = self.n, len(data)
+        if m is None:
+            m = len(set(data))
         model = start_model
         if model is None:
             a, b, pi = np.random.random((n, n)), np.random.random((n, m)), \
@@ -196,17 +216,17 @@ class HMM():
             a /= a.sum(axis=1)[:, np.newaxis]
             b /= b.sum(axis=1)[:, np.newaxis]
             pi /= pi.sum()
-            model = HMMModel(a, b, pi)
+            model = HMMModel.get_model_from_real_prob(a, b, pi)
 
-        prev_p, p = -1., 0.
+        prev_p, p = np.log(1.), np.log(0.)
         n_iter = 0
-        while abs(p - prev_p) > eps and n_iter < max_iter:
+        while abs(np.exp(p) - np.exp(prev_p)) > eps and n_iter < max_iter:
             alpha, beta = self.forward(model, data), self.backward(model, data)
             model, gamma = update_params(alpha, beta)
-            p = alpha[-1].sum()
+            p = logsumexp(alpha[-1])
             n_iter += 1
 
-        return p, model
+        return np.exp(p), model
 
     def optimal_model(self, data, n_starts=15, start_model=None, **kwargs):
 
