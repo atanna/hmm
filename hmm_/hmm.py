@@ -1,7 +1,6 @@
 import numpy as np
 from scipy import stats
 from hmm_.hmm_exception import *
-from numpy import array
 from scipy.misc import logsumexp
 
 
@@ -26,16 +25,25 @@ class HMMModel():
     """
 
     @staticmethod
-    def get_model_from_real_prob(a, b, pi):
-        return HMMModel.get_model(np.log(a), np.log(b), np.log(pi))
+    def get_model_from_real_prob(a, b, pi, **kwargs):
+        return HMMModel.get_model(np.log(a), np.log(b), np.log(pi), **kwargs)
 
     @staticmethod
-    def get_model(a, b, pi):
+    def get_model(a, b, pi, canonic=True):
         model = HMMModel()
-        model.a, model.b, model.pi = array(a), array(b), array(pi)
+        model.a, model.b, model.pi = np.array(a), np.array(b), np.array(pi)
         model.n, model.m = model.b.shape
         model.check()
+        if canonic:
+            model.canonical_form()
         return model
+
+    def canonical_form(self):
+        order = np.lexsort(
+            np.round(np.exp(self.b.T), 5))  # admissible error 1e-5
+        self.a = self.a[order, :][:, order]
+        self.b = self.b[order]
+        self.pi = self.pi[order]
 
     def check(self, eps=1e-10):
         if self.a.shape != (len(self.pi), self.b.shape[0]):
@@ -53,21 +61,24 @@ class HMMModel():
         hidden_states = np.arange(self.n)
         states = np.arange(self.m)
         sample = np.zeros(size, dtype=np.int)
+        h_sample = np.zeros(size, dtype=np.int)
         p = self.pi
         for i in range(size):
             h_state = stats.rv_discrete(name='custm',
                                         values=(hidden_states,
                                                 np.exp(p))).rvs()
+            p = self.a[h_state]
             sample[i] = stats.rv_discrete(name='custm',
                                           values=(states,
                                                   np.exp(
                                                       self.b[h_state]))).rvs()
-            p = self.a[h_state]
-        return sample
+            h_sample[i] = h_state
+
+        return sample, h_sample
 
     def distance(self, model):
-        return np.max([abs(self.a - model.a).max(),
-                       abs(self.b - model.b).max()])
+        return np.mean([abs(np.exp(self.a) - np.exp(model.a)).mean(),
+                        abs(np.exp(self.b) - np.exp(model.b)).mean()])
 
     def __str__(self):
         return "a: {}\n" \
@@ -91,7 +102,8 @@ class HMM():
         :return: p(data| model)
 
         """
-        return logsumexp(HMM.forward(model, data)[-1])
+        p = logsumexp(HMM.forward(model, data)[-1])
+        return -np.inf if p != p else p  # fix nan
 
     @staticmethod
     def optimal_state_sequence(model, data):
@@ -138,8 +150,9 @@ class HMM():
 
         alpha[0] = model.pi + model.b[:, data[0]]
         for t in range(1, T):
-            alpha[t] = logsumexp(alpha[t - 1] + model.a.T, axis=1) + \
-                       model.b[:, data[t]]
+            tmp = logsumexp(alpha[t - 1] + model.a.T, axis=1)
+            tmp = np.array(list(map(lambda t: -np.inf if t != t else t, tmp)))
+            alpha[t] = tmp + model.b[:, data[t]]
         return alpha
 
     @staticmethod
@@ -184,7 +197,7 @@ class HMM():
             gamma = np.log(np.zeros((T, n)))
 
             p = logsumexp(alpha[-1])
-            eps_check = 1e-9
+            eps_check = 1e-8
             for t in range(T - 1):
                 ksi_t = alpha[t][:, np.newaxis] + model.a \
                         + model.b[:, data[t + 1]] + beta[t + 1] - p
@@ -204,7 +217,7 @@ class HMM():
             b -= sum_gamma
             pi = gamma[0]
 
-            return HMMModel.get_model(a, b, pi), gamma
+            return HMMModel.get_model(a, b, pi, canonic=False), gamma
 
         n, T = self.n, len(data)
         if m is None:
@@ -216,7 +229,7 @@ class HMM():
             a /= a.sum(axis=1)[:, np.newaxis]
             b /= b.sum(axis=1)[:, np.newaxis]
             pi /= pi.sum()
-            model = HMMModel.get_model_from_real_prob(a, b, pi)
+            model = HMMModel.get_model_from_real_prob(a, b, pi, canonic=False)
 
         prev_p, p = np.log(1.), np.log(0.)
         n_iter = 0
@@ -235,6 +248,7 @@ class HMM():
             p, model = self._optimal_model(data, **kwargs)
             if p > best_p:
                 best_p, best_model = p, model
+        best_model.canonical_form()
         return best_p, best_model
 
 
