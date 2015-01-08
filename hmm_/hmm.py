@@ -1,7 +1,9 @@
 import numpy as np
 from scipy import stats
+from collections import Counter
 from hmm_.hmm_exception import *
 from scipy.misc import logsumexp
+from scipy.stats import chisquare
 
 
 """
@@ -25,7 +27,10 @@ class HMMModel():
     """
 
     @staticmethod
-    def get_model_from_real_prob(a, b, pi, **kwargs):
+    def get_model_from_real_prob(a, b, pi=None, **kwargs):
+        if pi is None:
+            pi = np.random.random(len(a))
+            pi /= pi.sum()
         return HMMModel.get_model(np.log(a), np.log(b), np.log(pi), **kwargs)
 
     @staticmethod
@@ -38,6 +43,26 @@ class HMMModel():
             model.canonical_form()
         return model
 
+    @staticmethod
+    def get_freq_model_and_freq_states(data, h_states, n=None, m=None):
+        if n is None:
+            n = len(set(data))
+        if m is None:
+            m = len(set(h_states))
+        h_state_freq = Counter(h_states)
+        b_freq = Counter(zip(h_states, data))
+        b_ = np.array([[b_freq[(i, j)] / h_state_freq[i] for j in range(m)]
+                       for i in range(n)])
+
+        a_freq = Counter(zip(h_states, h_states[1:]))
+        h_state_freq[h_states[-1]] -= 1
+        a_ = np.array([[a_freq[(i, j)] / h_state_freq[i] for j in range(n)]
+                       for i in range(n)])
+        h_state_freq[h_states[-1]] += 1
+        pi_ = np.zeros(n)
+        pi_[data[0]] = 1.
+        return HMMModel.get_model_from_real_prob(a_, b_, pi_), h_state_freq
+
     def canonical_form(self):
         order = np.lexsort(
             np.round(np.exp(self.b.T), 5))  # admissible error 1e-5
@@ -45,7 +70,7 @@ class HMMModel():
         self.b = self.b[order]
         self.pi = self.pi[order]
 
-    def check(self, eps=1e-10):
+    def check(self, eps=1e-5):
         if self.a.shape != (len(self.pi), self.b.shape[0]):
             raise HMMException("wrong model's shape")
         if abs(np.exp(logsumexp(self.a, axis=1)) - np.ones(
@@ -60,21 +85,31 @@ class HMMModel():
     def sample(self, size):
         hidden_states = np.arange(self.n)
         states = np.arange(self.m)
-        sample = np.zeros(size, dtype=np.int)
-        h_sample = np.zeros(size, dtype=np.int)
+        data = np.zeros(size, dtype=np.int)
+        h_states = np.zeros(size, dtype=np.int)
         p = self.pi
         for i in range(size):
             h_state = stats.rv_discrete(name='custm',
                                         values=(hidden_states,
                                                 np.exp(p))).rvs()
             p = self.a[h_state]
-            sample[i] = stats.rv_discrete(name='custm',
-                                          values=(states,
-                                                  np.exp(
-                                                      self.b[h_state]))).rvs()
-            h_sample[i] = h_state
+            data[i] = stats.rv_discrete(name='custm',
+                                        values=(states,
+                                                np.exp(
+                                                    self.b[h_state]))).rvs()
+            h_states[i] = h_state
 
-        return sample, h_sample
+        return data, h_states
+
+    def chisquare(self, model, h_state_freq):
+        freq = np.array([h_state_freq[i] for i
+                         in range(self.n)])[:, np.newaxis]
+
+        def arr_freq(arr):
+            return np.exp(arr) * freq
+
+        return {"a": chisquare(arr_freq(self.a), arr_freq(model.a), axis=1),
+                "b": chisquare(arr_freq(self.b), arr_freq(model.b), axis=1)}
 
     def distance(self, model):
         return np.mean([abs(np.exp(self.a) - np.exp(model.a)).mean(),
@@ -83,8 +118,8 @@ class HMMModel():
     def __str__(self):
         return "a: {}\n" \
                "b: {}\n" \
-               "pi: {}\n".format(np.exp(self.a), np.exp(self.b),
-                                 np.exp(self.pi))
+               "pi: {}".format(np.exp(self.a), np.exp(self.b),
+                               np.exp(self.pi))
 
 
 class HMM():
@@ -197,7 +232,7 @@ class HMM():
             gamma = np.log(np.zeros((T, n)))
 
             p = logsumexp(alpha[-1])
-            eps_check = 1e-8
+            eps_check = 1e-6
             for t in range(T - 1):
                 ksi_t = alpha[t][:, np.newaxis] + model.a \
                         + model.b[:, data[t + 1]] + beta[t + 1] - p
@@ -239,7 +274,7 @@ class HMM():
             p = logsumexp(alpha[-1])
             n_iter += 1
 
-        return np.exp(p), model
+        return p, model
 
     def optimal_model(self, data, n_starts=15, start_model=None, **kwargs):
 

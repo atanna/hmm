@@ -23,21 +23,30 @@ def test_sample(model, T):
             p(data|model) and p(data|optimal_model)
     """
     n, m = model.n, model.m
+    model.canonical_form()
     data, h_states = model.sample(T)
     print("model:\n", model)
-    print("sample:", data)
-    print("h_states:", h_states)
     print("p(data|model)",
-          np.exp(HMM.observation_log_probability(model, data)))
+          HMM.observation_log_probability(model, data))
+
+    freq_model, h_states_freq = \
+        HMMModel.get_freq_model_and_freq_states(data, h_states)
+    print("freq_model:\n", freq_model)
+    print("p(data|freq_model)",
+          HMM.observation_log_probability(freq_model, data))
+    print("chisquare(model, freq_model):\n",
+          model.chisquare(freq_model, h_states_freq))
 
     p, optimal_model = HMM(n).optimal_model(data, m=m, n_starts=5,
-                                            eps=1e-17, max_iter=1e2)
+                                            eps=1e-23, max_iter=1e2)
+
+    print("optimal_model:\n", optimal_model)
     print("p(data|optimal_model)", p)
-    dist = model.distance(optimal_model)
-    print("dist:", dist)
-    print(optimal_model)
-    print("p(data|optimal_model)",
-          np.exp(HMM.observation_log_probability(optimal_model, data)))
+    print("chisquare(model, optimal_model):\n",
+          model.chisquare(optimal_model, h_states_freq))
+    print("dist:", model.distance(optimal_model))
+    print("chisquare(freq_model, optimal_model):\n",
+          freq_model.chisquare(optimal_model, h_states_freq))
 
 
 def fudge_test_sample():
@@ -81,7 +90,23 @@ def good_fudge_test_sample():
     test_sample(model, T)
 
 
-good_fudge_test_sample()
+def _test_sample():
+    n, T = 2, int(10e2)
+    # T = 10
+    a = np.array([[0.5, 0.5],
+                  [0.3, 0.7]])
+    b = np.array([[0.1, 0.9],
+                  [0.3, 0.7]])
+    pi = np.array([1., 0.0])
+    model = HMMModel.get_model_from_real_prob(a, b, pi)
+    test_sample(model, T)
+
+
+_test_sample()
+# good_fudge_test_sample()
 # good_test()
 # fudge_test_sample()
 # random_test_sample()
+
+
+
