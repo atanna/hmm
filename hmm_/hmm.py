@@ -232,7 +232,7 @@ class HMM():
             gamma = np.log(np.zeros((T, n)))
 
             p = logsumexp(alpha[-1])
-            eps_check = 1e-6
+            eps_check = 1e-4
             for t in range(T - 1):
                 ksi_t = alpha[t][:, np.newaxis] + model.a \
                         + model.b[:, data[t + 1]] + beta[t + 1] - p
@@ -266,9 +266,10 @@ class HMM():
             pi /= pi.sum()
             model = HMMModel.get_model_from_real_prob(a, b, pi, canonic=False)
 
-        prev_p, p = np.log(1.), np.log(0.)
-        n_iter = 0
-        while abs(np.exp(p) - np.exp(prev_p)) > eps and n_iter < max_iter:
+        prev_p, p = 1., np.log(0.)
+        n_iter = 0.
+        while (prev_p > 0 or (p - prev_p > eps)) and n_iter < max_iter:
+            prev_p = p
             alpha, beta = self.forward(model, data), self.backward(model, data)
             model, gamma = update_params(alpha, beta)
             p = logsumexp(alpha[-1])
