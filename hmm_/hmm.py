@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.core.umath import logaddexp
 from scipy import stats
 from collections import Counter
 from hmm_.hmm_exception import *
@@ -28,13 +29,15 @@ class HMMModel():
 
     @staticmethod
     def get_model_from_real_prob(a, b, pi=None, **kwargs):
-        if pi is None:
-            pi = np.random.random(len(a))
-            pi /= pi.sum()
-        return HMMModel.get_model(np.log(a), np.log(b), np.log(pi), **kwargs)
+        return HMMModel.get_model(np.log(a), np.log(b),
+                                  np.log(pi) if pi is not None else None,
+                                  **kwargs)
 
     @staticmethod
-    def get_model(log_a, log_b, log_pi, canonic=True):
+    def get_model(log_a, log_b, log_pi=None, canonic=True):
+        if log_pi is None:
+            pi = np.random.random(len(log_a))
+            log_pi = np.log(pi / pi.sum())
         model = HMMModel()
         model.log_a, model.log_b, model.log_pi = \
             np.array(log_a), np.array(log_b), np.array(log_pi)
@@ -63,6 +66,13 @@ class HMMModel():
         pi_ = np.zeros(n)
         pi_[data[0]] = 1.
         return HMMModel.get_model_from_real_prob(a_, b_, pi_), h_state_freq
+
+    @staticmethod
+    def get_random_model(n, m, **kwargs):
+        a, b = np.random.random((n, n)), np.random.random((n, m))
+        a /= a.sum(axis=1)[:, np.newaxis]
+        b /= b.sum(axis=1)[:, np.newaxis]
+        return HMMModel.get_model_from_real_prob(a, b, **kwargs)
 
     def canonical_form(self):
         order = np.lexsort(
@@ -105,16 +115,19 @@ class HMMModel():
 
         return data, h_states
 
-    def chisquare(self, model, h_state_freq):
+    def chisquare(self, model, h_state_freq, alpha=0.01):
         freq = np.array([h_state_freq[i] for i
                          in range(self.n)])[:, np.newaxis]
 
-        def arr_freq(arr):
-            return np.exp(arr) * freq
+        def arr_freq(log_arr):
+            return 5 + np.exp(log_arr) * freq
+            # 5 in case p=0. (in chisquare values must be >5)
 
-        return {
-        "a": chisquare(arr_freq(self.log_a), arr_freq(model.log_a), axis=1),
-        "b": chisquare(arr_freq(self.log_b), arr_freq(model.log_b), axis=1)}
+        p_value_a = chisquare(arr_freq(self.log_a),
+                              arr_freq(model.log_a), axis=1)[1]
+        p_value_b = chisquare(arr_freq(self.log_b),
+                              arr_freq(model.log_b), axis=1)[1]
+        return {"a": (p_value_a > alpha).all(), "b": (p_value_b > alpha).all()}
 
     def distance(self, model):
         return np.mean([abs(np.exp(self.log_a) - np.exp(model.log_a)).mean(),
@@ -170,9 +183,9 @@ class HMM():
         T = len(data)
         psi = np.array(psi)
         q = np.zeros(T)
-        q[T - 1] = log_delta_t.argmax()
-        for i in range(2, T + 1):
-            q[-i] = psi[-i + 1][q[-i + 1]]
+        q[-1] = log_delta_t.argmax()
+        for i in range(2, T+1):
+            q[-i] = psi[-i+1][q[-i+1]]
         return q.astype(np.int)
 
     @staticmethod
@@ -208,9 +221,9 @@ class HMM():
         T = len(data)
         log_beta = np.zeros((T, model.n))
         log_beta[T - 1] = np.log(1.)
-        for t in range(T - 2, -1, -1):
+        for t in range(T-2, -1, -1):
             log_beta[t] = logsumexp(
-                model.log_a + (model.log_b[:, data[t + 1]] + log_beta[t + 1]),
+                model.log_a + (model.log_b[:, data[t+1]] + log_beta[t+1]),
                 axis=1)
         return log_beta
 
@@ -245,9 +258,8 @@ class HMM():
                             + log_beta[t + 1] - log_p
                 log_gamma[t] = logsumexp(log_ksi_t, axis=1)
 
-                log_a = logsumexp([log_a, log_ksi_t], axis=0)
-                log_b[:, data[t]] = logsumexp(
-                    [log_b[:, data[t]], log_gamma[t]], axis=0)
+                log_a = logaddexp(log_a, log_ksi_t)
+                log_b[:, data[t]] = logaddexp(log_b[:, data[t]], log_gamma[t])
 
                 assert abs(np.exp(logsumexp(log_alpha[t] + log_beta[t])) -
                            np.exp(log_p)) < eps_check, \
@@ -269,15 +281,10 @@ class HMM():
             m = len(set(data))
         model = start_model
         if model is None:
-            a, b, pi = np.random.random((n, n)), np.random.random((n, m)), \
-                       np.random.random(n)
-            a /= a.sum(axis=1)[:, np.newaxis]
-            b /= b.sum(axis=1)[:, np.newaxis]
-            pi /= pi.sum()
-            model = HMMModel.get_model_from_real_prob(a, b, pi, canonic=False)
+            model = HMMModel.get_random_model(n, m)
 
         log_prev_p, log_p = 1., np.log(0.)
-        n_iter = 0.
+        n_iter = 0
         while (log_prev_p > 0 or (log_p - log_prev_p > log_eps)) \
                 and n_iter < max_iter:
             log_prev_p = log_p
@@ -293,7 +300,7 @@ class HMM():
 
         best_log_p, best_model, best_log_gamma = \
             self._optimal_model(data, start_model, **kwargs)
-        for i in range(n_starts):
+        for i in range(n_starts-1):
             log_p, model, log_gamma = self._optimal_model(data, **kwargs)
             if log_p > best_log_p:
                 best_log_p, best_model, best_log_gamma = log_p, model, log_gamma
