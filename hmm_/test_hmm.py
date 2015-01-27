@@ -7,7 +7,7 @@ def sklern_test(data, **kwargs):
     hmm = MultinomialHMM(**kwargs)
     hmm.fit([data])
     return HMMModel.get_model(hmm._log_transmat, hmm._log_emissionprob,
-                              hmm._log_startprob), hmm.score(data)
+                              hmm._log_startprob), hmm.score(data), hmm
 
 
 def test_sample(model, T, f_name=None, **kwargs):
@@ -22,6 +22,11 @@ def test_sample(model, T, f_name=None, **kwargs):
 
     print("T", T)
     data, h_states = model.sample(T)
+    model, log_sklearn_p, hmm = sklern_test(data, n_components=n,
+                                               n_iter=int(kwargs['max_iter']))
+    data, h_states = hmm.sample(T)
+    print(data)
+
     print("model:\n", model)
     log_real_p = HMM.observation_log_probability(model, data)
     print("p(data|model)", log_real_p)
@@ -41,8 +46,9 @@ def test_sample(model, T, f_name=None, **kwargs):
     print("chisquare(model, freq_model):",
           model.chisquare(freq_model, h_states_freq))
 
-    sklearn_model, log_sklearn_p = sklern_test(data, n_components=n,
+    sklearn_model, log_sklearn_p, hmm = sklern_test(data, n_components=n,
                                                n_iter=int(kwargs['max_iter']))
+
     print("\nsklearn_model:\n", sklearn_model)
     print("p(data|sklearn_model)", log_sklearn_p)
     print("dist:", model.distance(sklearn_model))
@@ -76,12 +82,12 @@ def test_sample(model, T, f_name=None, **kwargs):
 
 
 def _test_sample():
-    n, m, T = 2, 2, int(1e5)
+    n, m, T = 2, 2, int(1e3)
 
     model = HMMModel.get_random_model(n, m)
 
-    sys.stdout = open("test/{}_{}_{}_test".format(n, m, T), 'w')
-    test_sample(model, T, n_starts=3, log_eps=2e-3, max_iter=2e2)
+    sys.stdout = open("test/{}_{}_{}_test_sklearn_sample".format(n, m, T), 'w')
+    test_sample(model, T, n_starts=3, log_eps=2e-3, max_iter=1e2)
 
 
 _test_sample()

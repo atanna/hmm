@@ -7,11 +7,25 @@ def random_data(n, alphabet="abc"):
 
 
 def test():
-    data = random_data(100)
-    vlmm = VLMM().fit(data, k=3, min_num=2)
-    contexts = list(vlmm.get_contexts(data))
+    data = random_data(50, alphabet="ab")
+    hmm_params = dict(n_starts=3,
+                      log_eps=2e-3, max_iter=1e2)
+    vlmm = VLMM().fit(data, type_vlmm="h_context", k=3, **hmm_params)
 
     print("data:", data)
-    print("contexts:", contexts)
+    print("contexts:", vlmm.c)
+
+    print("\nstates_contexts_hmm:", vlmm.n_contexts)
+    sample = vlmm.sample(100)
+    print(sample)
+    print(vlmm.score(sample))
+
+    n = vlmm.n_contexts
+    print("\nhierarchy_hmm:", n)
+    vlmm = VLMM(n).fit(data, k=3, min_num=2, **hmm_params)
+    sample = vlmm.sample(100)
+    print(sample)
+    print(vlmm.score(sample))
 
 test()
+

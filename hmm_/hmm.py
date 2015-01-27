@@ -90,12 +90,13 @@ class HMMModel():
                 np.exp(logsumexp(self.log_a, axis=1))))
         if abs(np.exp(logsumexp(self.log_b, axis=1)) - np.ones(
                 len(self.log_a))).max() > eps:
-            raise HMMException("exp_b.sum(axis=1) is not unit vector")
+            raise HMMException("{} is not unit vector".format(
+                np.exp(logsumexp(self.log_b, axis=1))))
         if abs(np.exp(logsumexp(self.log_pi)) - np.ones(
                 len(self.log_a))).max() > eps:
             raise HMMException("exp_sum(pi) must equal 1")
 
-    def sample(self, size):
+    def sample(self, size, with_h_states=True):
         hidden_states = np.arange(self.n)
         states = np.arange(self.m)
         data = np.zeros(size, dtype=np.int)
@@ -113,7 +114,7 @@ class HMMModel():
                                                         h_state]))).rvs()
             h_states[i] = h_state
 
-        return data, h_states
+        return data, h_states if with_h_states else data
 
     def chisquare(self, model, h_state_freq, alpha=0.01):
         freq = np.array([h_state_freq[i] for i
@@ -156,7 +157,7 @@ class HMM():
 
         """
         log_p = logsumexp(HMM.forward(model, data)[-1])
-        return -np.inf if log_p != log_p else log_p  # fix nan
+        return HMM._fix_nan(log_p)
 
     @staticmethod
     def optimal_state_sequence(model, data):
@@ -184,8 +185,8 @@ class HMM():
         psi = np.array(psi)
         q = np.zeros(T)
         q[-1] = log_delta_t.argmax()
-        for i in range(2, T+1):
-            q[-i] = psi[-i+1][q[-i+1]]
+        for i in range(2, T + 1):
+            q[-i] = psi[-i + 1][q[-i + 1]]
         return q.astype(np.int)
 
     @staticmethod
@@ -203,8 +204,8 @@ class HMM():
 
         log_alpha[0] = model.log_pi + model.log_b[:, data[0]]
         for t in range(1, T):
-            tmp = logsumexp(log_alpha[t - 1] + model.log_a.T, axis=1)
-            tmp = np.array(list(map(lambda t: -np.inf if t != t else t, tmp)))
+            tmp = HMM._nan_filter(logsumexp(log_alpha[t - 1] + model.log_a.T,
+                                            axis=1))
             log_alpha[t] = tmp + model.log_b[:, data[t]]
         return log_alpha
 
@@ -221,11 +222,19 @@ class HMM():
         T = len(data)
         log_beta = np.zeros((T, model.n))
         log_beta[T - 1] = np.log(1.)
-        for t in range(T-2, -1, -1):
-            log_beta[t] = logsumexp(
-                model.log_a + (model.log_b[:, data[t+1]] + log_beta[t+1]),
-                axis=1)
+        for t in range(T - 2, -1, -1):
+            log_beta[t] = HMM._nan_filter(logsumexp(
+                model.log_a + (model.log_b[:, data[t + 1]] + log_beta[t + 1]),
+                axis=1))
         return log_beta
+
+    @staticmethod
+    def _nan_filter(arr):
+        return np.array(list(map(HMM._fix_nan, arr)))
+
+    @staticmethod
+    def _fix_nan(x):
+        return -np.inf if x != x else x
 
     def _optimal_model(self, data, start_model=None, m=None, log_eps=1e-30,
                        max_iter=1e5):
@@ -250,22 +259,23 @@ class HMM():
             log_b = np.log(np.zeros((n, m)))
             log_gamma = np.log(np.zeros((T, n)))
 
-            log_p = logsumexp(log_alpha[-1])
+            log_p = self._fix_nan(logsumexp(log_alpha[-1]))
             eps_check = 1e-4
             for t in range(T - 1):
                 log_ksi_t = log_alpha[t][:, np.newaxis] + model.log_a \
                             + model.log_b[:, data[t + 1]] \
                             + log_beta[t + 1] - log_p
-                log_gamma[t] = logsumexp(log_ksi_t, axis=1)
+                log_gamma[t] = self._nan_filter(logsumexp(log_ksi_t, axis=1))
 
                 log_a = logaddexp(log_a, log_ksi_t)
                 log_b[:, data[t]] = logaddexp(log_b[:, data[t]], log_gamma[t])
 
-                assert abs(np.exp(logsumexp(log_alpha[t] + log_beta[t])) -
+                assert abs(np.exp(self._fix_nan(logsumexp(log_alpha[t] +
+                                                             log_beta[t]))) -
                            np.exp(log_p)) < eps_check, \
                     "{} != {}".format(logsumexp(log_alpha[t] + log_beta[t]),
                                       log_p)
-                assert abs(np.exp(logsumexp(log_gamma[t])) - 1.) < eps_check, \
+                assert abs(np.exp(logsumexp(log_gamma[t]))) - 1. < eps_check, \
                     "{} != 1.".format(np.exp(logsumexp(log_gamma[t])))
 
             log_sum_gamma = logsumexp(log_gamma, axis=0)[:, np.newaxis]
@@ -300,7 +310,7 @@ class HMM():
 
         best_log_p, best_model, best_log_gamma = \
             self._optimal_model(data, start_model, **kwargs)
-        for i in range(n_starts-1):
+        for i in range(n_starts - 1):
             log_p, model, log_gamma = self._optimal_model(data, **kwargs)
             if log_p > best_log_p:
                 best_log_p, best_model, best_log_gamma = log_p, model, log_gamma
