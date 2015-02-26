@@ -7,29 +7,32 @@ All theory and notations were taken from:
 http://projecteuclid.org/download/pdf_1/euclid.aos/1018031204
 """
 
+class ContextException(Exception):
+    pass
 
 class Context():
     def __init__(self, data, **kwargs):
         self._build_trie(data, **kwargs)
         self.choose_K()
 
-    def _build_trie(self, data, k=3, min_num=2):
+    def _build_trie(self, data, max_len=3, min_num=2, big_prune=False):
         """
         :param data:
-        :param k:
-        the maximum length of the context
+        :param max_len:
+        the maximum length of the context (letter M in Dumont)
         :param min_num: default=2
         the minimum number of occurrences for context
         :return:
         """
         _data = data[::-1]
         self.alphabet = set(_data)
+        self._end = _data[:max_len]
         trie = datrie.Trie(self.alphabet)
         self._n = len(_data)
-        self._k = k
+        self._max_len = max_len
         term_nodes = set()
         for i in range(self._n):
-            for l in range(1, k + 2):
+            for l in range(1, max_len + 2):
                 if i + l > self._n:
                     break
                 s = _data[i: i + l]
@@ -37,21 +40,35 @@ class Context():
                     trie[s] += 1
                 else:
                     trie[s] = 1
-                if l == k:
-                    term_nodes.add(_data[i: i + k])
+                if l == max_len:
+                    term_nodes.add(_data[i: i + max_len])
+        if big_prune:
+            for v, n_v in trie.items():
+                if n_v < min_num:
+                    trie._delitem(v)
+        else:
+            for v, n_v in trie.items():
+                for c in self.alphabet:
+                    if c+v not in trie or trie[c+v] >= min_num:
+                        break
+                else:
+                    for c in self.alphabet:
+                        trie._delitem(c+v)
 
-        for v, k in trie.items():
-            if k < min_num:
-                trie._delitem(v)
+
         self._term_trie = datrie.Trie(self.alphabet)
         for t_node in term_nodes:
             key = trie.longest_prefix(t_node)
             self._term_trie[key] = trie[key]
+        self._recount_contexts()
         self.trie = trie
 
     def choose_K(self):
         c = 2 * len(self.alphabet) + 4
         self.K = c * np.log(self._n)
+
+    def _recount_contexts(self):
+        self.contexts = self._term_trie.keys()
 
     def N(self, w):
         """
@@ -74,13 +91,34 @@ class Context():
     def tr_p(self, x, w):
         """
         :param x:
-        :param w:
+        :param w = q_t,q_(t-1),..q_(t-|w|+1):
         :return: p(x|w)
         """
+        return np.exp(self.log_tr_p(x, w))
+
+    def log_p(self, w):
+        """
+        :param w:
+        :return: log_p(w)
+        """
+        return np.log(self.N(w)) - np.log(self._n)
+
+    def log_tr_p(self, x, w):
+        """
+        :param x:
+        :param w = q_t,q_(t-1),..q_(t-|w|+1):
+        :return: log_p(x|w)
+        """
+        n = self.N(w)
+        if n == 0:
+            return self.log_p(x)
+
         n_xw = self.N(x + w)
         if n_xw == 0:
-            return 0.
-        return n_xw / self.N(w)
+            return -np.inf
+        if self._end.startswith(w):
+            n -= 1
+        return np.log(n_xw) - np.log(n)
 
     def kl(self, w, u):
         """
@@ -118,6 +156,7 @@ class Context():
                     self._term_trie[w] = self._term_trie[t_node]
                     self._term_trie._delitem(t_node)
                     changes += 1
+        self._recount_contexts()
         return changes
 
     def get_c(self, w, direction=1):
@@ -125,24 +164,32 @@ class Context():
         try:
             return self._term_trie.longest_prefix(s)
         except KeyError:
-            return sorted(self._term_trie.items(s), key=lambda x: -x[1])[0][0]
+            candidates =  self._term_trie.items(s)
+            if len(candidates) == 0:
+                return self.get_c(s[:-1])
+            return sorted(candidates, key=lambda x: -x[1])[0][0]
             # first least context with the same prefix
+
+    def get_contexts(self, X):
+        n = len(X)
+        for i in range(n):
+            yield self.get_c(X[max(0, i - self._max_len): i + 1], direction=-1)
 
 
 class VLMM():
     def __init__(self, n=None):
         self.n = n
 
-    def fit(self, data, k, K=0.7, type_vlmm="hierarchy", min_num=2, **kwargs):
+    def fit(self, data, max_len, K=0.7, type_vlmm="hierarchy", min_num=2, **kwargs):
         """
         :param data:
-        :param k: the maximum length of the context
+        :param max_len: the maximum length of the context
         :param K: threshold for Kullback-Leibler distance
         :param kwargs:
         :return:
         """
-        self.k = k
-        self._context = Context(data, k=k, min_num=min_num)
+        self.max_len = max_len
+        self._context = Context(data, max_len=max_len, min_num=min_num)
         while self._context.prune(K) > 0:
             pass
         self.c = self._context._term_trie.keys()
@@ -160,12 +207,7 @@ class VLMM():
         return self
 
     def get_contexts(self, X):
-        n = len(X)
-        for i in range(n):
-            yield self.get_context(X[max(0, i - self.k): i + 1], direction=-1)
-
-    def get_context(self, s, **kwargs):
-        return self._context.get_c(s, **kwargs)
+        return list(self._context.get_contexts(X))
 
     def _fit_hierarchy(self, data, **kwargs):
         """
