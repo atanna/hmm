@@ -110,7 +110,7 @@ class VLHMM():
         self._init(data, max_len)
         self._em(n_iter)
         # while self.context_trie.prune(th_prune) > 0:
-        #     pass
+        # pass
         return self
 
     def _em(self, n_iter):
@@ -122,7 +122,7 @@ class VLHMM():
             print("_alpha: {}..".format(np.exp(log_alpha[:len_print])))
             print("_beta: {}..".format(np.exp(log_beta[:len_print])))
             print("_gamma: {}..".format(np.exp(log_gamma[:len_print])))
-            print("-"*10, "log_p={},  p={}"
+            print("-" * 10, "log_p={},  p={}"
                   .format(self._log_p, np.exp(self._log_p)))
 
             return log_alpha, log_beta, log_gamma
@@ -202,7 +202,8 @@ class VLHMM():
             for q in range(self.n):
                 self.log_a[q, l] = logsumexp(self.ksi[:, q, l]) - sum_gamma
 
-        self.log_a = self.log_a - logsumexp(self.log_a, axis=0)
+        self.log_a = self.log_a - logsumexp(self.log_a,
+                                            axis=0)  # strange normalisation..
         print("a:\n{}".format(np.exp(self.log_a)))
 
 
