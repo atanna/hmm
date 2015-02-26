@@ -82,11 +82,11 @@ def test_sample(model, T, f_name=None, **kwargs):
 
 
 def _test_sample():
-    n, m, T = 2, 2, int(1e3)
+    n, m, T = 2, 2, int(3e2)
 
     model = HMMModel.get_random_model(n, m)
 
-    sys.stdout = open("test/{}_{}_{}_test_sklearn_sample".format(n, m, T), 'w')
+    # sys.stdout = open("test/{}_{}_{}_test_sklearn_sample".format(n, m, T), 'w')
     test_sample(model, T, n_starts=3, log_eps=2e-3, max_iter=1e2)
 
 

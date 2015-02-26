@@ -94,7 +94,7 @@ class HMMModel():
                 np.exp(logsumexp(self.log_b, axis=1))))
         if abs(np.exp(logsumexp(self.log_pi)) - np.ones(
                 len(self.log_a))).max() > eps:
-            raise HMMException("exp_sum(pi) must equal 1")
+            raise HMMException("exp_sum(pi)={} != 1.".format(np.exp(logsumexp(self.log_pi))))
 
     def sample(self, size, with_h_states=True):
         hidden_states = np.arange(self.n)
@@ -156,7 +156,7 @@ class HMM():
         :return: p(data| model)
 
         """
-        log_p = logsumexp(HMM.forward(model, data)[-1])
+        log_p = logsumexp(HMM.log_forward(model, data)[-1])
         return HMM._fix_nan(log_p)
 
     @staticmethod
@@ -190,14 +190,14 @@ class HMM():
         return q.astype(np.int)
 
     @staticmethod
-    def forward(model, data):
+    def log_forward(model, data):
         """
         Forward procedure
         additional values: alpha
         alpha[t,i] = p(data[1]...data[t]| q_t=x_i, model)
         :param model:
         :param data:
-        :return: alpha
+        :return: log_alpha
         """
         T = len(data)
         log_alpha = np.zeros((T, model.n))
@@ -210,14 +210,14 @@ class HMM():
         return log_alpha
 
     @staticmethod
-    def backward(model, data):
+    def log_backward(model, data):
         """
         Backward procedure
         additional values: beta
         beta[t,i] = p(data[t+1]...data[T]| q_t=x_i, model)
         :param model:
         :param data:
-        :return: beta
+        :return: log_beta
         """
         T = len(data)
         log_beta = np.zeros((T, model.n))
@@ -298,8 +298,8 @@ class HMM():
         while (log_prev_p > 0 or (log_p - log_prev_p > log_eps)) \
                 and n_iter < max_iter:
             log_prev_p = log_p
-            log_alpha = self.forward(model, data)
-            log_beta = self.backward(model, data)
+            log_alpha = self.log_forward(model, data)
+            log_beta = self.log_backward(model, data)
             model, log_gamma = update_params(log_alpha, log_beta)
             log_p = logsumexp(log_alpha[-1])
             n_iter += 1
