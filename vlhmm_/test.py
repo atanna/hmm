@@ -1,7 +1,8 @@
 import random
 import numpy as np
 import matplotlib.pyplot as plt
-from vlmm_ import vlhmm_wang
+from vlhmm_.vlhmm import ContextTrie
+from vlhmm_.vlhmm_dumont import ContextTrieDumont
 
 
 def get_data(n, n_components=3):
@@ -22,12 +23,19 @@ def show_data(X):
     plt.show()
 
 
-def test():
-    data = get_data(200)
-    # show_data(data)
-    n = 2
-    vlhmm = vlhmm_wang.VLHMM(n)
-    vlhmm.fit(data, max_len=3, n_iter=3)
+def random_string(n, alphabet="abc"):
+    return "".join([random.choice(alphabet) for i in range(n)])
 
 
-test()
+def dumont_context_test():
+    data = random_string(1450)
+    print(data)
+    context_trie_dumont = ContextTrieDumont(data, max_len=5)
+    print(context_trie_dumont.contexts)
+    for i in range(10):
+        print(context_trie_dumont.recount_tr_trie(), context_trie_dumont.recount_c_tr_trie())
+
+
+
+if __name__ == "__main__":
+    dumont_context_test()

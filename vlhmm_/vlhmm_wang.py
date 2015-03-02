@@ -1,97 +1,29 @@
 import numpy as np
-from functools import reduce
-from scipy.cluster.vq import kmeans2
 from scipy.misc import logsumexp
-from scipy.stats import multivariate_normal
-from vlmm_.vlmm import Context
+from vlhmm_.vlhmm import VLHMM, GaussianEmission, ContextTrie
 
 
 len_print = 4
 
 
-class Emission():
-    def log_p(self, y, l):
-        """
-        :param y: observation
-        :param l: context's number
-        :return: p(y|c_l)
-        """
-        pass
-
-
-class GaussinEmission(Emission):
-    def __init__(self, data, labels, n_contexts):
-        self.n_contexts = n_contexts
-        self.labels = labels
-        self.data = data
-        self._init_params(data)
-
-    def _init_params(self, data, eps=1e-4):
-        self.n = data.shape[1]
-        self.mu = np.zeros((self.n_contexts, data.shape[1]))
-        self.sigma = np.zeros((self.n_contexts, self.n, self.n))
-        self.T = len(data)
-        for l in range(self.n_contexts):
-            y = data[self.labels == l]
-            # print(l, y)
-            self.mu[l] = y.mean(axis=0)
-            tmp = (y - self.mu[l]) + eps
-            self.sigma[l] = np.array((tmp.T.dot(tmp)) / len(y)) \
-                .reshape((self.n, self.n))
-
-    def update_params(self, log_gamma):
-        def get_new_params(l):
-            mu = (gamma[:, l][:, np.newaxis] * self.data).sum(axis=0)
-            denom = gamma[:, l].sum()
-            mu /= denom
-            sigma = np.zeros((self.n, self.n))
-            for t in range(self.T):
-                tmp = (self.data[t] - mu)[:, np.newaxis]
-                sigma += gamma[t, l] \
-                         * tmp.dot(tmp.T)
-            return mu, sigma / denom
-
-        gamma = np.exp(log_gamma)
-        print("gamma___{}..".format(gamma[:len_print]))
-        for l in range(self.n_contexts):
-            self.mu[l], self.sigma[l] = get_new_params(l)
-
-    def _log_p(self, y, l):
-        return multivariate_normal.logpdf(y, self.mu[l], self.sigma[l])
-
-    def log_p(self, y, l):
-        res = self._log_p(y, l) - logsumexp(
-            [self._log_p(y, i) for i in range(self.n_contexts)])
-        return res
-
-
-class VLHMM():
-    def __init__(self, n):
-        """
-        :param n: - length of context's alphabet, n <= 10
-        :return:
-        """
-        self.n = n
-
+class VLHMMWang(VLHMM):
     def _init(self, data, max_len):
         self.T = len(data)
         self.data = data
-        centre, labels = kmeans2(data, self.n)
-        X = "".join(list(map(str, labels)))
-        self.context_trie = Context(X, max_len=max_len)
+        self._init_X(data)
+        self.context_trie = ContextTrie(self.X, max_len=max_len)
         self.contexts = list(self.context_trie.contexts)
         self.n_contexts = len(self.contexts)
-        self.data_contexts = list(self.context_trie.get_contexts(X))
+        self.data_contexts = list(self.context_trie.get_contexts(self.X))
         self.id_c = dict(zip(self.contexts, range(self.n_contexts)))
         self._init_a()
         log_context_p = np.array(
             [self.context_trie.log_p(c) for c in self.contexts])
         self.log_context_p = log_context_p - logsumexp(log_context_p)
-        labels = np.array(
-            list(map(lambda c: self.id_c[c], self.data_contexts)))
-        self.emission = GaussinEmission(data, labels, self.n_contexts)
+        labels = list(map(lambda c: self.id_c[c], self.data_contexts))
+        self.emission = GaussianEmission(data, labels, self.n_contexts)
 
-        print("X: {}".format(X))
+        print("X: {}".format(self.X))
         print("n_contexts:", self.n_contexts)
         print("contexts: {}".format(self.contexts))
         print("data_contexts: {}".format(self.data_contexts))
@@ -109,8 +41,10 @@ class VLHMM():
     def fit(self, data, max_len=4, n_iter=5, th_prune=0.7):
         self._init(data, max_len)
         self._em(n_iter)
-        # while self.context_trie.prune(th_prune) > 0:
-        # pass
+        changes = self.context_trie.prune()
+        while changes > 0:
+            print("prune", changes)
+            changes = self.context_trie.prune()
         return self
 
     def _em(self, n_iter):
@@ -133,10 +67,6 @@ class VLHMM():
 
         for i in range(n_iter):
             m_step(*e_step())
-
-    def get_c(self, *args):
-        return self.context_trie.get_c(
-            reduce(lambda res, x: res + str(x), args, ""))
 
     def log_forward(self):
         log_alpha = np.zeros((self.T, self.n_contexts))
