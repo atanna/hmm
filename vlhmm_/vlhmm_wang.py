@@ -38,14 +38,11 @@ class VLHMMWang(VLHMM):
               for l in range(self.n_contexts)]
              for q in range(self.n)])
 
-    def fit(self, data, max_len=4, n_iter=5, th_prune=0.7):
+    def fit(self, data, max_len=4, n_iter=5, th_prune=1e-4):
         self._init(data, max_len)
         self._em(n_iter)
-        changes = self.context_trie.prune()
-        while changes > 0:
-            print("prune", changes)
-            changes = self.context_trie.prune()
-        return self
+        self._prune(th_prune)
+        return self.X                   #fix it
 
     def _em(self, n_iter):
         def e_step():
@@ -67,6 +64,12 @@ class VLHMMWang(VLHMM):
 
         for i in range(n_iter):
             m_step(*e_step())
+
+    def _prune(self, th_prune):
+        changes = self.context_trie.prune(th_prune)
+        while changes > 0:
+            print("prune", changes)
+            changes = self.context_trie.prune(th_prune)
 
     def log_forward(self):
         log_alpha = np.zeros((self.T, self.n_contexts))

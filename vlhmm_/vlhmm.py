@@ -2,6 +2,7 @@ import datrie
 import numpy as np
 from functools import reduce
 from scipy.cluster.vq import kmeans2
+from scipy.misc import logsumexp
 from scipy.stats import multivariate_normal
 
 
@@ -96,14 +97,28 @@ class ContextTrie():
             for v, n_v in trie.items():
                 if n_v < min_num:
                     trie._delitem(v)
+            for v, n_v in trie.items():
+                if len(v) < max_len:
+                    for c in self.alphabet:
+                        if v+c not in trie:
+                            trie[v+c] = 0
+                            term_nodes.add(v+c)
         else:
             for v, n_v in trie.items():
+                prune = True
                 for c in self.alphabet:
-                    if c + v not in trie or trie[c + v] >= min_num:
+                    if v+c not in trie or trie[v+c] >= min_num:
+                        prune = False
                         break
-                else:
+                if prune:
                     for c in self.alphabet:
-                        trie._delitem(c + v)
+                        trie._delitem(v+c)
+                else:
+                    if len(v) < max_len:
+                        for c in self.alphabet:
+                            if v+c not in trie:
+                                trie[v+c] = 0
+                                term_nodes.add(v+c)
 
         self._term_trie = datrie.Trie(self.alphabet)
         for t_node in term_nodes:
@@ -238,5 +253,7 @@ class VLHMM():
         return self.context_trie.get_c(
             reduce(lambda res, x: res + str(x), args, ""))
 
+
+len_print = 4
 
 

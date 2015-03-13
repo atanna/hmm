@@ -90,7 +90,8 @@ def _test_sample():
     test_sample(model, T, n_starts=3, log_eps=2e-3, max_iter=1e2)
 
 
-_test_sample()
+if __name__ == "__main__":
+    _test_sample()
 
 
 
