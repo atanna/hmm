@@ -3,7 +3,7 @@ import numpy as np
 from scipy.misc import logsumexp
 from hmm_.hmm import HMMModel
 from vlhmm_.context_tr_trie import ContextTransitionTrie
-from vlhmm_.vlhmm import VLHMM, GaussianEmission
+from vlhmm_.vlhmm import AbstractVLHMM, GaussianEmission
 
 
 class AbstractForwardBackward():
@@ -114,7 +114,7 @@ class AbstractForwardBackward():
         print("log_p {}".format(self._log_p))
 
 
-class VLHMMWang(VLHMM, AbstractForwardBackward):
+class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _init(self, data):
         self.tr_trie = ContextTransitionTrie(self.X, max_len=self.max_len)
         self.contexts = self.tr_trie.seq_contexts
