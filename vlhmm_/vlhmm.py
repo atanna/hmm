@@ -17,45 +17,59 @@ class Emission():
 
 
 class GaussianEmission(Emission):
-    def __init__(self, data, labels, L=None):
-        if L is None:
-            self.L = len(set(labels))
+    def __init__(self, data, labels, n_states=None):
+        if data is None:
+            return
+        if n_states is None:
+            self.n_states = len(set(labels))
         else:
-            self.L = L
+            self.n_states = n_states
         self.labels = np.array(list(labels)).astype(np.int)
         self.data = data
         self._init_params(data)
 
+    def _set_params(self, mu, sigma):
+        self.n_states = len(mu)
+        self.n = mu.shape[1]
+        self.mu = mu
+        self.sigma = sigma
+
     def _init_params(self, data, eps=1e-4):
         self.n = data.shape[1]
-        self.mu = np.zeros((self.L, self.n))
-        self.sigma = np.zeros((self.L, self.n, self.n))
+        self.mu = np.zeros((self.n_states, self.n))
+        self.sigma = np.zeros((self.n_states, self.n, self.n))
         self.T = len(data)
-        for l in range(self.L):
-            y = data[self.labels == l]
-            self.mu[l] = y.mean(axis=0)
-            tmp = (y - self.mu[l]) + eps
-            self.sigma[l] = np.array((tmp.T.dot(tmp)) / len(y)) \
+        for state in range(self.n_states):
+            y = data[self.labels == state]
+            self.mu[state] = y.mean(axis=0)
+            tmp = (y - self.mu[state]) + eps
+            self.sigma[state] = np.array((tmp.T.dot(tmp)) / len(y)) \
                 .reshape((self.n, self.n))
 
-    def update_params(self, log_gamma):
-        def get_new_params(l):
-            mu = (gamma[:, l][:, np.newaxis] * self.data).sum(axis=0)
-            denom = gamma[:, l].sum()
+    def update_params(self, log_gamma, log_=True):
+        def get_new_params(state):
+            mu = (gamma[:, state][:, np.newaxis] * self .data).sum(axis=0)
+            denom = gamma[:, state].sum()
             mu /= denom
             sigma = np.zeros((self.n, self.n))
             for t in range(self.T):
                 tmp = (self.data[t] - mu)[:, np.newaxis]
-                sigma += gamma[t, l] \
+                sigma += gamma[t, state] \
                          * tmp.dot(tmp.T)
             return mu, sigma / denom
 
-        gamma = np.exp(log_gamma)
-        for l in range(self.L):
-            self.mu[l], self.sigma[l] = get_new_params(l)
+        if log_:
+            gamma = np.exp(log_gamma)
+        else:
+            gamma = log_gamma
+        for state in range(self.n_states):
+            self.mu[state], self.sigma[state] = get_new_params(state)
 
-    def log_p(self, y, l):
-        return multivariate_normal.logpdf(y, self.mu[l], self.sigma[l])
+    def log_p(self, y, state):
+        return multivariate_normal.logpdf(y, self.mu[state], self.sigma[state])
+
+    def sample(self, state, size=1):
+        return np.array(multivariate_normal.rvs(self.mu[state], self.sigma[state], size))
 
 
 class ContextException(Exception):
@@ -77,14 +91,15 @@ class ContextTrie():
         """
         _data = data[::-1]
         self.alphabet = set(_data)
+        self.n = len(self.alphabet)
         self._end = _data[:max_len]
         trie = datrie.Trie(self.alphabet)
-        self._n = len(_data)
+        self.T = len(_data)
         self._max_len = max_len
         term_nodes = set()
-        for i in range(self._n):
+        for i in range(self.T):
             for l in range(1, max_len + 2):
-                if i + l > self._n:
+                if i + l > self.T:
                     break
                 s = _data[i: i + l]
                 if s in trie:
@@ -99,10 +114,12 @@ class ContextTrie():
                     trie._delitem(v)
             for v, n_v in trie.items():
                 if len(v) < max_len:
+                    not_full = False
                     for c in self.alphabet:
                         if v+c not in trie:
-                            trie[v+c] = 0
-                            term_nodes.add(v+c)
+                            not_full=True
+                    if not_full:
+                        term_nodes.add(v)
         else:
             for v, n_v in trie.items():
                 prune = True
@@ -129,6 +146,7 @@ class ContextTrie():
 
     def _recount_contexts(self):
         self.contexts = self._term_trie.keys()
+        self.n_contexts = len(self.contexts)
 
     def N(self, w):
         """
@@ -146,7 +164,7 @@ class ContextTrie():
         :param w:
         :return: p(w)
         """
-        return self.N(w) / self._n
+        return self.N(w) / self.T
 
     def tr_p(self, x, w):
         """
@@ -161,7 +179,7 @@ class ContextTrie():
         :param w:
         :return: log_p(w)
         """
-        return np.log(self.N(w)) - np.log(self._n)
+        return np.log(self.N(w)) - np.log(self.T)
 
     def log_tr_p(self, x, w):
         """
@@ -237,6 +255,172 @@ class ContextTrie():
         return changes
 
 
+class ContextTrieVLMM(ContextTrie):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.contexts = self._term_trie
+        self.alphabet = sorted(self.alphabet)
+        self._init_tr_trie()
+
+    def _init_tr_trie(self):
+        """
+        log_tr_trie = trie with log transition probability for all s,
+        such that s prefix context
+        log_tr_trie[s] = log_p(s[0]| s[1:])
+
+        log_c_tr_trie = trie with log transition probability for contexts
+        log_c_tr_trie[s] = log_p(s[0]| s[1:])
+        :return:
+        """
+        self.log_tr_trie = datrie.Trie(self.alphabet)
+        for s in self.trie.keys():
+                self.log_tr_trie[s] = super().log_tr_p(s[0], s[1:])
+
+        self.log_c_tr_trie = datrie.Trie(self.alphabet)
+
+        for s in self.contexts.keys():
+            for x in self.alphabet:
+                self.log_c_tr_trie[x+s] = super().log_tr_p(x, s)
+
+    def log_tr_p(self, x, s):
+        """
+        :param x:
+        :param s = q_t,q_(t-1),..q_(t-|s|+1):
+        :return: log_p(x|s)
+        """
+        try:
+            xs = self.log_c_tr_trie.longest_prefix(x + s)
+        except KeyError:
+            xs = x + s
+        if xs in self.log_tr_trie:
+            return self.log_tr_trie[xs]
+        else:
+            return np.log(0.)
+
+    def recount_tr_trie(self):
+        """
+        recount transition probability on all substrings of contexts
+        :return:
+        """
+
+        def log_sum_p(items):
+            if len(items) == 0:
+                return None
+            res = np.log(0.)
+            for w, log_p in items:
+                if log_p != -np.inf:
+                    res = np.logaddexp(res, log_p)
+            return res
+
+        diff = 0.
+        log_tr_trie = datrie.Trie(self.alphabet)
+        for s, val in self.log_tr_trie.items():
+            numer = log_sum_p(self.log_c_tr_trie.items(s))
+            if numer is None:
+                continue
+            denom = np.log(0.)
+            s1 = s[1:]
+            for x in self.alphabet:
+                log_sum_p_ = log_sum_p(self.log_c_tr_trie.items(x+s1))
+                assert log_sum_p_ is not None, x+s1
+                denom = np.logaddexp(denom, log_sum_p_)
+            new_val = numer - denom if denom > -np.inf else numer
+            log_tr_trie[s] = new_val
+            diff = max(diff, np.abs(new_val-val))
+        self.log_tr_trie = log_tr_trie
+        return diff
+
+    def recount_c_tr_trie(self):
+        """
+        recount transition probability on contexts
+        :return:
+        """
+        diff = 0.
+        for s, val in self.log_c_tr_trie.items():
+            new_val = self.log_tr_p(s[0], s[1:])
+            diff = max(diff, np.abs(new_val-val))
+            self.log_c_tr_trie[s] = new_val
+
+        return diff
+
+    def count_log_a(self, uniform=False):
+        if uniform:
+            log_a = np.ones((self.n, self.n_contexts))
+        else:
+            contexts = sorted(self.contexts.keys())
+            log_a = np.array(
+                [[self.log_tr_p(q, contexts[l])
+                  for l in range(self.n_contexts)]
+                 for q in self.alphabet])
+        return log_a - logsumexp(log_a, axis=0)
+
+    def recount_with_log_a(self, log_a, contexts):
+        """
+        recount transition probability using matrix of probability
+        :return:
+        """
+        self.log_c_tr_trie = datrie.Trie(self.alphabet)
+        for i, c in enumerate(contexts):
+            for q in self.alphabet:
+                self.log_c_tr_trie[q + c] = log_a[q, i]
+        self.contexts = datrie.Trie(self.alphabet)
+        for c in contexts:
+            self.contexts[c]=1
+        self.n_contexts = len(self.contexts)
+        self.recount_tr_trie()
+
+    def prune(self, K=1e-4):
+        def f(s):
+            if s in used:
+                return
+            used.add(s)
+            for q_ in self.alphabet:
+                if self.kl(s, q_) > K:
+                    break
+            else:
+                for q in self.alphabet:
+                    self.log_c_tr_trie[q+s] = self.log_tr_trie[q+s]
+                    for q_ in self.alphabet:
+                        _del(q+s+q_)
+                return True
+            return False
+
+        def _del(s):
+            self.log_c_tr_trie._delitem(s)
+            for q_ in self.alphabet:
+                if s+q_ in self.log_tr_trie:
+                    _del(s+q_)
+        prune = False
+        used = set()
+        for c in self.contexts.keys():
+            if f(c[:-1]):
+                prune = True
+        self.contexts = datrie.Trie(self.alphabet)
+        for s in self.log_c_tr_trie.keys():
+            self.contexts[s[1:]] = 1
+        self.n_contexts = len(self.contexts)
+        self.recount_tr_trie()
+        return prune
+
+    def kl(self, s, q_):
+        sum = 0
+        for q in self.alphabet:
+            sum += np.exp(self.log_tr_trie[q+s+q_])*(self.log_tr_trie[q+s+q_] - self.log_tr_trie[q+s])
+        return sum
+
+    def get_c(self, w, direction=1):
+        s = w[::direction]
+        try:
+            return self.contexts.longest_prefix(s)
+        except KeyError:
+            candidates = self.contexts.items(s)
+            if len(candidates) == 0:
+                return self.get_c(s[:-1])
+            return sorted(candidates, key=lambda x: -x[1])[0][0]
+            # first least context with the same prefix
+
+
+
 class VLHMM():
     def __init__(self, n):
         """
@@ -246,11 +430,14 @@ class VLHMM():
         self.n = n
 
     def _init_X(self, data):
-        centre, labels = kmeans2(data, self.n)
+        try:
+            centre, labels = kmeans2(data, self.n)
+        except TypeError:
+            labels= np.random.choice(range(self.n), len(data))
         self.X = "".join(list(map(str, labels)))
 
     def get_c(self, *args):
-        return self.context_trie.get_c(
+        return self.tr_trie.get_c(
             reduce(lambda res, x: res + str(x), args, ""))
 
 
