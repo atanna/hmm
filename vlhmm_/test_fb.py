@@ -2,6 +2,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.hmm import GaussianHMM
+from vlhmm_.context_tr_trie import ContextTransitionTrie
 import vlhmm_.forward_backward as fb
 from hmm_.hmm import HMMModel, HMM
 from vlhmm_.vlhmm import GaussianEmission
@@ -39,7 +40,7 @@ def rand_params(n):
     return np.array(mu), np.array(sigma)
 
 
-def sample_hmm(size, n=2, h_states=None):
+def sample_gauss(size, n=2, h_states=None):
     if h_states is None:
         model_ = HMMModel.get_random_model(n, n)
         data, h_states = model_.sample(size)
@@ -82,13 +83,13 @@ def test_wang_mixture():
 
 def test_wang_with_hmm_sample():
     def go(vlhmm):
-        vlhmm.fit(data, max_len=3, n_iter=15, th_prune=4e-2)
+        vlhmm.fit(data, max_len=5, n_iter=15, th_prune=4e-2)
         print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
         print("sklearn: {}\nvlhmm: {}".format(sk_log_p, vlhmm._log_p))
         print("T=", T)
 
 
-    n, m, T = 2, 2, int(4e2)
+    n, m, T = 2, 2, int(3e3)
     a = np.array([[0.2, 0.8],
                   [0.6, 0.4]])
     b = np.array([[0.1, 0.9],
@@ -97,7 +98,7 @@ def test_wang_with_hmm_sample():
 
     model_ = HMMModel.get_model_from_real_prob(a, b)
     data, h_states = model_.sample(T)
-    data = sample_hmm(T, n, h_states)
+    data = sample_gauss(T, n, h_states)
 
     sk_log_p = test_sklearn(data, n)
     go(fb.VLHMMWang(n))
@@ -119,7 +120,7 @@ def test_gauss_hmm():
 
     model_ = HMMModel.get_model_from_real_prob(a, b)
     data, h_states = model_.sample(T)
-    data = sample_hmm(T, n, h_states)
+    data = sample_gauss(T, n, h_states)
     n_iter=100
     sk_log_p = test_sklearn(data, n, n_iter)
     go(fb.HMM_Gauss(n))
@@ -151,7 +152,28 @@ def test_wang_with_data_from_file(f_name):
     vlhmm.fit(data[:,np.newaxis], max_len=3, n_iter=3)
 
 
+def main_test(contexts, log_a, n=2, T=int(2e3), max_len=4):
+    def go(vlhmm):
+        vlhmm.fit(data, max_len=max_len, n_iter=15, th_prune=4e-3)
+        print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
+        print("T=", T, "max_len=", max_len)
+
+    h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
+    data = sample_gauss(T, n, list(map(int, h_states)))
+    go(fb.VLHMMWang(n))
+
+
 if __name__ == "__main__":
-    test_wang_with_hmm_sample()
-    # test_wang_mixture()
-    # test_gauss_hmm()
+    contexts = ["00", "01", "10", "110", "111"]
+    log_a = np.log(np.array(
+        [[0.8, 0.4, 0.3, 0.2, 0.9],
+         [0.2, 0.6, 0.7, 0.8, 0.1]]
+    ))
+
+    contexts = ["00", "01", "1"]
+    log_a = np.log(np.array(
+        [[0.7, 0.4, 0.3],
+         [0.3, 0.6, 0.7]]
+    ))
+
+    main_test(contexts, log_a)

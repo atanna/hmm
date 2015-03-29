@@ -1,26 +1,6 @@
 import random
-import datrie
 import numpy as np
-import matplotlib.pyplot as plt
 from vlhmm_.context_tr_trie import ContextTransitionTrie
-
-
-def get_data(n, n_components=3):
-    X = np.zeros((n_components * n, 2))
-    _var = 10.
-    for i in range(n_components):
-        mean = ([random.randrange(_var / 2),
-                 random.randrange(_var / 2)] + np.random.random((2,))) * _var
-        cov = np.random.random((2, 2)) * _var
-        x, y = np.random.multivariate_normal(mean, cov, n).T
-        X[n * i:n * (i + 1)] = np.c_[x, y]
-    return np.random.permutation(X)
-
-
-def show_data(X):
-    plt.plot(X[:, 0], X[:, 1], 'x')
-    plt.axis('equal')
-    plt.show()
 
 
 def random_string(n, alphabet="abc"):
@@ -44,30 +24,32 @@ def test_context_tr_trie_with_data():
     print(context_transition_trie.log_c_tr_trie.items())
 
 
-# test_context_tr_trie_with_data()
-
-
-def test_context_tr_trie():
+def test_context_tr_trie_sample():
     alphabet = "01"
-    contexts = ["01","00","11","10"]
+
+    contexts = ["00", "01", "10", "110", "111"]
     log_a = np.log(np.array(
-        [[0.3,0.3, 0.6, 0.58],
-         [0.7,0.7, 0.4, 0.42]]))
-    th_prune = 1e-3
-    c_tr_trie = ContextTransitionTrie(n=2, max_len=3)
-    print(c_tr_trie.seq_contexts)
-    print(np.exp(c_tr_trie.count_log_a()))
+        [[0.8, 0.4, 0.3, 0.2, 0.9],
+         [0.2, 0.6, 0.7, 0.8, 0.1]]
+    ))
+
+    n, T = 2, int(5e3)
+    data = ContextTransitionTrie.sample_(T, contexts, log_a)
+
+    c_tr_trie = ContextTransitionTrie(n=2)
     c_tr_trie.recount_with_log_a(log_a, contexts)
     print("contexts:", c_tr_trie.seq_contexts)
 
-    c_tr_trie.prune(th_prune)
 
-    print("prune", c_tr_trie.seq_contexts)
-    print_all_p(c_tr_trie.log_c_tr_trie.items())
+    trie = ContextTransitionTrie(data, max_len=6)
+    th_prune = 4e-2
+    while trie.prune(th_prune):
+        print("prune", trie.seq_contexts)
+
+    for c in trie.seq_contexts:
+        for q in alphabet:
+            print("p({}|{})={}   {}".format(q, c, trie.tr_p(q, c), c_tr_trie.tr_p(q, c)))
+    print()
 
 
-
-test_context_tr_trie()
-
-
-
+test_context_tr_trie_sample()

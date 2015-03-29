@@ -1,4 +1,5 @@
 import datrie
+from scipy import stats
 import numpy as np
 from scipy.misc import logsumexp
 
@@ -18,7 +19,7 @@ class ContextTransitionTrie():
                 for q in alphabet:
                     for c in gen_all_contexts(alphabet, l-1):
                         yield q+c
-        self._max_len = kwargs["max_len"]
+        self._max_len = kwargs["max_len"] if "max_len" in kwargs else 3
         self.n = kwargs["n"]
         self.alphabet = "".join(list(map(str, range(self.n))))
         self.seq_contexts = list(gen_all_contexts(self.alphabet, self._max_len))
@@ -168,8 +169,10 @@ class ContextTransitionTrie():
 
     def get_contexts(self, X):
         n = len(X)
+        c = ""
         for i in range(n):
-            yield self.get_c(X[max(0, i - self._max_len): i + 1], direction=-1)
+            c = self.get_c(X[i]+c, direction=-1)
+            yield c
 
     def recount_tr_trie(self):
         """
@@ -216,6 +219,26 @@ class ContextTransitionTrie():
             self.contexts[c] = 1
         self.n_contexts = len(self.contexts)
         self.recount_tr_trie()
+        return self
+
+    def sample(self, size):
+        X = []
+        states = range(self.n)
+        context = ""
+        for i in range(size):
+            p = [self.log_tr_p(i, context) for i in self.alphabet]
+            # print(context, np.exp(p))
+            q = stats.rv_discrete(name='custm',
+                                  values=(states,
+                                          np.exp(p))).rvs()
+            X.append(q)
+            context = self.get_c(str(q)+context)
+
+        return "".join(map(str, X))
+
+    @staticmethod
+    def sample_(size, contexts, log_a):
+        return ContextTransitionTrie(n=2).recount_with_log_a(log_a, contexts).sample(size)
 
     def prune(self, K=1e-4):
         def f(s):
@@ -233,6 +256,8 @@ class ContextTransitionTrie():
                 return True
             return False
 
+        if self.n_contexts < 2:
+            return False
         n_prune = 0
         used = set()
         c_to_del = set()
