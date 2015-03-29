@@ -1,6 +1,8 @@
+import random
 import numpy as np
 from functools import reduce
 from scipy.cluster.vq import kmeans2
+from scipy.misc import logsumexp
 from scipy.stats import multivariate_normal
 
 
@@ -15,9 +17,11 @@ class Emission():
 
 
 class GaussianEmission(Emission):
-    def __init__(self, data, labels, n_states=None):
+    def __init__(self, data=None, labels=None, n_states=None):
         if data is None:
             return
+        if labels is None:
+            labels = [random.choice(range(n_states)) for i in range(len(data))]
         if n_states is None:
             self.n_states = len(set(labels))
         else:
@@ -65,6 +69,9 @@ class GaussianEmission(Emission):
 
     def log_p(self, y, state):
         return multivariate_normal.logpdf(y, self.mu[state], self.sigma[state])
+
+    def all_log_p(self, y):
+        return np.array([self.log_p(y, i) for i in range(self.n_states)])
 
     def sample(self, state, size=1):
         return np.array(multivariate_normal.rvs(self.mu[state], self.sigma[state], size))

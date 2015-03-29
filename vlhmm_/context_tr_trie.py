@@ -4,8 +4,28 @@ from scipy.misc import logsumexp
 
 
 class ContextTransitionTrie():
-    def __init__(self, data, **kwargs):
-        self._init_tr_trie(data, **kwargs)
+    def __init__(self, data=None, **kwargs):
+        if data is None:
+            self._init_without_data(**kwargs)
+        else:
+            self._init_tr_trie(data, **kwargs)
+
+    def _init_without_data(self, **kwargs):
+        def gen_all_contexts(alphabet, l):
+            if l == 0:
+                yield ""
+            else:
+                for q in alphabet:
+                    for c in gen_all_contexts(alphabet, l-1):
+                        yield q+c
+        self._max_len = kwargs["max_len"]
+        self.n = kwargs["n"]
+        self.alphabet = "".join(list(map(str, range(self.n))))
+        self.seq_contexts = list(gen_all_contexts(self.alphabet, self._max_len))
+        self.n_contexts = len(self.seq_contexts)
+        self.contexts = datrie.Trie(self.alphabet)
+        for c in self.seq_contexts:
+            self.contexts[c] = 1
 
     def _init_tr_trie(self, *args, **kwargs):
         def freq(w):
@@ -98,6 +118,7 @@ class ContextTransitionTrie():
         :return: p(q|s)
         """
         return np.exp(self.log_tr_p(q, s))
+
     def _log_sum_p(self, w):
         try:
             s = self.log_c_tr_trie.longest_prefix(w)
@@ -170,8 +191,8 @@ class ContextTransitionTrie():
 
         return diff
 
-    def count_log_a(self, uniform=False):
-        if uniform:
+    def count_log_a(self, equal=False):
+        if equal or "log_c_tr_trie" not in self.__dict__:
             log_a = np.ones((self.n, self.n_contexts))
         else:
             log_a = np.array(

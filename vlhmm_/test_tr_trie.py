@@ -32,7 +32,6 @@ def print_all_p(items):
             print("p({}|{}) = {}".format(s[0], s[1:], np.exp(val)))
 
 
-
 def test_context_tr_trie_with_data():
 
     data = random_string(100, "10")
@@ -55,7 +54,9 @@ def test_context_tr_trie():
         [[0.3,0.3, 0.6, 0.58],
          [0.7,0.7, 0.4, 0.42]]))
     th_prune = 1e-3
-    c_tr_trie = ContextTransitionTrie(alphabet)
+    c_tr_trie = ContextTransitionTrie(n=2, max_len=3)
+    print(c_tr_trie.seq_contexts)
+    print(np.exp(c_tr_trie.count_log_a()))
     c_tr_trie.recount_with_log_a(log_a, contexts)
     print("contexts:", c_tr_trie.seq_contexts)
 
