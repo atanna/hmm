@@ -1,40 +1,51 @@
 \documentclass[10pt,a4paper]{article}
+
 \usepackage[utf8]{inputenc}
 \usepackage[english,russian]{babel}
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage{amssymb}
 \usepackage{textcomp}
+
+\usepackage{hyperref}
+
+\usepackage[margin=17mm]{geometry}
+
 \begin{document}
+
+\title{Скрытые Марковские модели переменного порядка для анализа данных
+  ChIP-seq}
+\author{Атаманова Анна, кафедра системного программирования СПбГУ, \url{anne.atamanova@gmail.com}}
+
+\maketitle
+
+\begin{abstract}
+  Здесь нужно кратко описать суть работы и результаты.
+\end{abstract}
 
 \section{Введение}
 
-Дезоксирибонуклеиновая кислота (ДНК) является своеобразным кодом жизни. Эта молекула хранит и передает генетическую программу развития и функционирования живого организма. 
-В то же время, все функции ДНК зависят от ее соединений с белками. 
+Дезоксирибонуклеиновая кислота (ДНК) является своеобразным кодом жизни. Эта молекула хранит и передает генетическую программу развития и функционирования живого организма.
+В то же время, все функции ДНК зависят от ее соединений с белками.
 Поэтому, изучение ДНК-белковых взаимодействий актуально и привлекательно.
-Chip-seq (chromatin immunoprecipitation - sequencing)\cite{Chip-seq} является одним из современных методов, позволяющим выделить участки ДНК связанные с конкретным белком (одинаково применим к разным белкам). 
+Chip-seq (chromatin immunoprecipitation - sequencing)\cite{Johnson2007} является одним из современных методов, позволяющим выделить участки ДНК связанные с конкретным белком (одинаково применим к разным белкам).
 Однако, по понятным причинам (сложный биологический эксперимент), погрешность данного метода не может быть нулевой, и безрассудная вера ему лишена смысла. По этому, обычно, к результатам подобных методов накладывается вероятностная модель. Конечно, это добавляет ряд существенных ограничений. Однако, в качестве неоспоримого плюса можно привести тот факт, что хорошо подобранная модель позволяет понять природу данных и изучить их свойства.
 
-Итого, нашей задачей является нахождение модели по последовательности чисел выдаваемых Chip-seq. 
+Итого, нашей задачей является нахождение модели по последовательности чисел выдаваемых Chip-seq.
 
-В настоящее время, в качестве семейства искомых моделей, активное приминение находит HMM (Hidden Markov Model)\cite{HMM} второго порядка с Пуассоновским испусканием. 
+В настоящее время, в качестве семейства искомых моделей, активное приминение находит HMM (Hidden Markov Model)\cite{Rabiner1989} второго порядка с Пуассоновским испусканием.
 Данное семейство допускает предположение о том, что каждое состояние (наличие/отсутствие белка в заданной части генома) завист только от одного предыдущего.
 Можно ограничиться и более лояльным допущением о том, что состояние зависит от $n$ предыдущих состояний, однако такое допущение резко увеличивает сложность модели ($O(2\textsuperscript{n})$ параметров). Также, сложность заключается в подборе этого $n$ и переобучении в случае, если не все состояния имеют одинаковые длины контекстов зависимости.
-Последннее замечание подводит к идее использования VOHMM (Variable Order Hidden Markov Model)\cite{Wang}
+Последннее замечание подводит к идее использования VOHMM (Variable Order Hidden Markov Model)\cite{Wang2006}
 
 
 \section{Скрытые марковские модели переменного порядка}
 
+\section{Оценка модели}
 
- 
- 
- 
-\begin{thebibliography}{9}
-\bibitem{Wang} Y. Wang, “The variable-length hidden markov model and its applications on sequential data mining” (2005)
-\bibitem{Dumont} T. Dumont "Context Tree Estimation in Variable Length
-Hidden Markov Models", Université de Paris sud XI
-\bibitem{VLMC} P. Buhlmann, A.J.Wyner,"Variable Length Markov Chains"
-\bibitem{Chip-seq} \cite{http://bioinformaticsinstitute.ru/projects/563}
-\bibitem{HMM} Lawrence R. Rabiner "A tutorial on hidden Markov models and selected applications in speech recognition" (1989)
-\end{thebibliography}
+\section{Заключение}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
 \end{document}
