@@ -2,11 +2,28 @@ import random
 import numpy as np
 from functools import reduce
 from scipy.cluster.vq import kmeans2
-from scipy.misc import logsumexp
-from scipy.stats import multivariate_normal
+from scipy.stats import multivariate_normal, poisson
 
 
 class Emission():
+    def __init__(self, data=None, labels=None, n_states=None):
+        self.n_states = n_states
+        if data is None:
+            return
+        if labels is None:
+            labels = [random.choice(range(n_states)) for i in range(len(data))]
+        if n_states is None:
+            self.n_states = len(set(labels))
+        self.labels = np.array(list(labels)).astype(np.int)
+        self.data = data
+        self._init_params(data)
+
+    def _init_params(self, data):
+        pass
+
+    def set_rand_params(self):
+        pass
+
     def log_p(self, y, l):
         """
         :param y: observation
@@ -17,19 +34,6 @@ class Emission():
 
 
 class GaussianEmission(Emission):
-    def __init__(self, data=None, labels=None, n_states=None):
-        if data is None:
-            return
-        if labels is None:
-            labels = [random.choice(range(n_states)) for i in range(len(data))]
-        if n_states is None:
-            self.n_states = len(set(labels))
-        else:
-            self.n_states = n_states
-        self.labels = np.array(list(labels)).astype(np.int)
-        self.data = data
-        self._init_params(data)
-
     def _set_params(self, mu, sigma):
         self.n_states = len(mu)
         self.n = mu.shape[1]
@@ -67,6 +71,17 @@ class GaussianEmission(Emission):
         for state in range(self.n_states):
             self.mu[state], self.sigma[state] = get_new_params(state)
 
+    def set_rand_params(self, n=2, _var=10.):
+        self.n = n
+        mu = []
+        sigma = []
+        for i in range(self.n_states):
+            mu.append(([random.randrange(_var / self.n),
+                     random.randrange(_var / self.n)] + np.random.random((self.n,))) * _var)
+            sigma.append(np.random.random((self.n, self.n)) * _var)
+        self.mu  = np.array(mu)
+        self.sigma = np.array(sigma)
+
     def log_p(self, y, state):
         return multivariate_normal.logpdf(y, self.mu[state], self.sigma[state])
 
@@ -75,6 +90,48 @@ class GaussianEmission(Emission):
 
     def sample(self, state, size=1):
         return np.array(multivariate_normal.rvs(self.mu[state], self.sigma[state], size))
+
+
+class PoissonEmission(Emission):
+    """
+    1-dim
+    """
+
+    def _set_params(self, alpha):
+        self.n_states = len(alpha)
+        self.alpha = alpha
+
+    def _init_params(self, data):
+        self.alpha = np.zeros(self.n_states)
+        self.T = len(data)
+        for state in range(self.n_states):
+            y = data[self.labels == state]
+            self.alpha[state] = y.mean()
+
+    def update_params(self, log_gamma, log_=True):
+        def get_new_params(state):
+            alpha = (gamma[:, state][:,np.newaxis] * self.data).sum()
+            denom = gamma[:, state].sum()
+            return alpha / denom
+
+        if log_:
+            gamma = np.exp(log_gamma)
+        else:
+            gamma = log_gamma
+        for state in range(self.n_states):
+            self.alpha[state] = get_new_params(state)
+
+    def set_rand_params(self, _var=10.):
+        self.alpha = np.abs(np.random.random(self.n_states)) * _var
+
+    def log_p(self, y, state):
+        return poisson.logpmf(y, self.alpha[state])
+
+    def all_log_p(self, y):
+        return np.array([self.log_p(y, i) for i in range(self.n_states)])
+
+    def sample(self, state, size=1):
+        return np.array(poisson.rvs(self.alpha[state], size=size))
 
 
 class AbstractVLHMM():

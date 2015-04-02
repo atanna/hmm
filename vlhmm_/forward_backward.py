@@ -1,9 +1,13 @@
-from scipy import stats
 import numpy as np
+import pylab as plt
+from collections import defaultdict
+from scipy import stats
+from scipy.cluster.vq import kmeans2
 from scipy.misc import logsumexp
+from scipy.stats.mstats import mquantiles
 from hmm_.hmm import HMMModel
 from vlhmm_.context_tr_trie import ContextTransitionTrie
-from vlhmm_.vlhmm import AbstractVLHMM, GaussianEmission
+from vlhmm_.vlhmm import AbstractVLHMM, GaussianEmission, PoissonEmission
 
 
 class AbstractForwardBackward():
@@ -13,12 +17,12 @@ class AbstractForwardBackward():
         if data.ndim < 2:
             self.data = data[:, np.newaxis]
         self._init_a()
-        self._init_emission()
         self.n_contexts = self._get_n_contexts()
         self.log_alpha = np.zeros((self.T, self.n_contexts))
         self.log_beta = np.zeros((self.T, self.n_contexts))
         self.log_gamma = np.zeros((self.T, self.n_contexts))
         self.log_ksi = np.zeros((self.T, self.n, self.n_contexts))
+        self.track_log_p = defaultdict(list)
 
     def _init_X(self, data):
         pass
@@ -29,16 +33,29 @@ class AbstractForwardBackward():
     def _init_a(self):
         pass
 
-    def _init_emission(self):
-        pass
+    def _init_emission(self, type_emission):
+        if type_emission == "Poisson":
+            if self.equal_start:
+                self.emission = PoissonEmission(self.data, n_states=self.n)
+                return
+            self.emission = PoissonEmission(self.data, self.X, self.n)
+            return
 
-    def fit(self, data, n_iter=15, X=None, log_pr_thresh=1e-2, equal_start=False):
+        if self.equal_start:
+            self.emission = GaussianEmission(self.data, n_states=self.n)
+            return
+        self.emission = GaussianEmission(self.data, self.X, self.n)
+        print("init_mu = {}..\ninit_sigma = {}..\n".format(
+            self.emission.mu, self.emission.sigma))
+
+    def fit(self, data, n_iter=150, X=None, log_pr_thresh=1e-2, equal_start=False, type_emission="Poisson"):
         self.equal_start = equal_start
         if X is not None:
             self.X = X
         else:
             self._init_X(data)
         self._init(data)
+        self._init_emission(type_emission)
         self._em(n_iter, log_pr_thresh)
         return self
 
@@ -51,11 +68,11 @@ class AbstractForwardBackward():
         def m_step():
             self.update_tr_params()
             self.update_emission_params()
-
         prev_log_p = np.log(0)
         for i in range(n_iter):
             e_step()
             m_step()
+            self.track_log_p[self.n_contexts].append(self._log_p)
             if np.abs(prev_log_p - self._log_p) < log_pr_thresh:
                 return
             prev_log_p = self._log_p
@@ -117,6 +134,22 @@ class AbstractForwardBackward():
         print("a:\n{}".format(np.exp(self.log_a)))
         print("log_p {}".format(self._log_p))
 
+    def plot_log_p(self):
+        fig = plt.figure()
+
+        l = len(self.track_log_p)
+        min_y = min(map(lambda arr: mquantiles(arr, [0.2])[0], self.track_log_p.values()))
+        max_y = max(map(max, self.track_log_p.values()))
+        keys = sorted(self.track_log_p.keys(), reverse=True)
+        for i, n_context in enumerate(keys):
+            ax = fig.add_subplot(1, l, i+1)
+            ax.set_title("Number of contexts = {}".format(n_context))
+            ax.plot(self.track_log_p[n_context])
+            # min_y, max_y = mquantiles(self.track_log_p[n_context], [0.2, 1.])
+            ax.set_ylim(min_y, max_y)
+            ax.set_ylabel('log_p')
+        return fig
+
 
 class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _init(self, data):
@@ -137,14 +170,6 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         print("n_contexts:", self.n_contexts)
         print("contexts: {}".format(self.contexts))
         print("a: \n{}".format(np.exp(self.log_a)))
-        print("init_mu = {}..\ninit_sigma = {}..\n".format(
-            self.emission.mu, self.emission.sigma))
-
-    def _init_emission(self):
-        if self.equal_start:
-            self.emission = GaussianEmission(self.data, n_states=self.n)
-            return
-        self.emission = GaussianEmission(self.data, self.X, self.n)
 
     def _get_n_contexts(self):
         return self.n_contexts
@@ -152,10 +177,9 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _init_a(self):
         self.log_a = self.tr_trie.count_log_a()
 
-    def fit(self, data, max_len=4, X=None, n_iter=5, th_prune=1e-2,
-            equal_start=False, log_pr_thresh=1e-2):
+    def fit(self, data, max_len=4, n_iter=55, th_prune=1e-2, log_pr_thresh=1e-2, **kwargs):
         self.max_len = max_len
-        super().fit(data, n_iter, X, equal_start=equal_start, log_pr_thresh=log_pr_thresh)
+        super().fit(data, n_iter, log_pr_thresh=log_pr_thresh, **kwargs)
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
         while self._prune(th_prune):
             self._em(n_iter, log_pr_thresh)
@@ -220,12 +244,6 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
                 self.log_alpha[t][i_]
                 + self.log_a[int(c[0]), i_]
                 + self.emission.log_p(self.data[t + 1], self.state_c[i]))
-
-    def _update_beta(self, t, i):
-        self.log_beta[t][i] = logsumexp(
-            self.log_a[:, i] +
-            self.emission.all_log_p(self.data[t + 1]) +
-            self.log_beta[t + 1])
     
     def _update_beta(self, t, i):
         self.log_beta[t][i] = np.log(0.)
@@ -261,6 +279,57 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
 
 
 class HMM(AbstractForwardBackward):
+    def __init__(self, n):
+        self.n = n
+
+    def _init(self, data):
+        super()._init(data)
+
+    def _init_X(self, data):
+        try:
+            centre, labels = kmeans2(data, self.n)
+        except TypeError:
+            labels= np.random.choice(range(self.n), len(data))
+        self.X = "".join(list(map(str, labels)))
+
+    def _init_a(self):
+        if self.equal_start:
+            self.log_a = np.log(np.ones((self.n, self.n)) / self.n)
+            self.log_pi = np.log(np.ones(self.n) / self.n)
+            return
+        model = HMMModel.get_random_model(self.n, 1)
+        self.log_pi = model.log_pi
+        self.log_a = (model.log_a).T
+
+    def _get_n_contexts(self):
+        return self.n
+
+    def _update_first_alpha(self, i):
+        self.log_alpha[0][i] = self.log_pi[i] +\
+                               self.emission.log_p(self.data[0], i)
+
+    def _update_next_alpha(self, t, i):
+        self.log_alpha[t+1, i] = \
+            logsumexp(self.log_alpha[t] + self.log_a[i, :]) +\
+            self.emission.log_p(self.data[t+1], i)
+
+    def _update_beta(self, t, i):
+        self.log_beta[t][i] = logsumexp(
+            self.log_a[:, i] +
+            self.emission.all_log_p(self.data[t + 1]) +
+            self.log_beta[t + 1])
+
+    def _update_ksi(self, t, q, i):
+        self.log_ksi[t][q, i] = self.log_alpha[t][i] + \
+                                self.log_a[q,i] + \
+                                self.emission.log_p(self.data[t+1], q) + \
+                                self.log_beta[t+1, q]
+
+    def update_emission_params(self):
+        self.emission.update_params(self.log_gamma)
+
+
+class DiscreteHMM(AbstractForwardBackward):
     def __init__(self, n):
         self.n = n
 
@@ -317,50 +386,3 @@ class HMM(AbstractForwardBackward):
         # print("gamma", np.exp(self.log_gamma))
         print("a:\n{}".format(np.exp(self.model.log_a)))
         print("log_p {}".format(self._log_p))
-
-
-class HMM_Gauss(AbstractForwardBackward):
-    def __init__(self, n):
-        self.n = n
-
-    def _init(self, data):
-        super()._init(data)
-
-    def _init_a(self):
-        if self.equal_start:
-            self.log_a = np.log(np.ones((self.n, self.n)) / self.n)
-            self.log_pi = np.log(np.ones(self.n) / self.n)
-            return
-        model = HMMModel.get_random_model(self.n, 1)
-        self.log_pi = model.log_pi
-        self.log_a = (model.log_a).T
-
-    def _init_emission(self):
-        self.emission = GaussianEmission(self.data, n_states=self.n)
-
-    def _get_n_contexts(self):
-        return self.n
-
-    def _update_first_alpha(self, i):
-        self.log_alpha[0][i] = self.log_pi[i] +\
-                               self.emission.log_p(self.data[0], i)
-
-    def _update_next_alpha(self, t, i):
-        self.log_alpha[t+1, i] = \
-            logsumexp(self.log_alpha[t] + self.log_a[i, :]) +\
-            self.emission.log_p(self.data[t+1], i)
-
-    def _update_beta(self, t, i):
-        self.log_beta[t][i] = logsumexp(
-            self.log_a[:, i] +
-            self.emission.all_log_p(self.data[t + 1]) +
-            self.log_beta[t + 1])
-
-    def _update_ksi(self, t, q, i):
-        self.log_ksi[t][q, i] = self.log_alpha[t][i] + \
-                                self.log_a[q,i] + \
-                                self.emission.log_p(self.data[t+1], q) + \
-                                self.log_beta[t+1, q]
-
-    def update_emission_params(self):
-        self.emission.update_params(self.log_gamma)

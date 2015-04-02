@@ -1,11 +1,11 @@
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import vlhmm_.forward_backward as fb
 from sklearn.hmm import GaussianHMM
 from vlhmm_.context_tr_trie import ContextTransitionTrie
-import vlhmm_.forward_backward as fb
 from hmm_.hmm import HMMModel, HMM
-from vlhmm_.vlhmm import GaussianEmission
+from vlhmm_.vlhmm import GaussianEmission, PoissonEmission
 
 
 def data_to_file(data, f_name):
@@ -29,28 +29,21 @@ def get_mixture(n, n_components=3):
     return np.random.permutation(X)
 
 
-def rand_params(n):
-    mu = []
-    sigma = []
-    _var = 10.
-    for i in range(n):
-        mu.append(([random.randrange(_var / 2),
-                 random.randrange(_var / 2)] + np.random.random((2,))) * _var)
-        sigma.append(np.random.random((2, 2)) * _var)
-    return np.array(mu), np.array(sigma)
-
-
-def sample_gauss(size, n=2, h_states=None):
+def sample_(size, n=2, h_states=None, type_emission="Poisson"):
     if h_states is None:
         model_ = HMMModel.get_random_model(n, n)
         data, h_states = model_.sample(size)
         print("a", np.exp(model_.log_a))
 
-    emission = GaussianEmission()
-    emission._set_params(*rand_params(n))
-    print("mu", emission.mu)
+    if type_emission == "Poisson":
+        emission = PoissonEmission(n_states=n)
+        data = np.zeros(size)
+    else:
+        emission = GaussianEmission(n_states=n)
+        data = np.zeros((size, 2))
 
-    data = np.zeros((size, 2))
+    emission.set_rand_params()
+
     for i, state in enumerate(h_states):
         data[i] = emission.sample(state)
 
@@ -98,20 +91,25 @@ def test_wang_with_hmm_sample():
 
     model_ = HMMModel.get_model_from_real_prob(a, b)
     data, h_states = model_.sample(T)
-    data = sample_gauss(T, n, h_states)
+    data = sample_(T, n, h_states)
 
     sk_log_p = test_sklearn(data, n)
     go(fb.VLHMMWang(n))
 
 
-def test_gauss_hmm():
+def test_hmm(type_e="Poisson"):
     def go(vlhmm):
-        vlhmm.fit(data, n_iter=n_iter)
-        print("sklearn: {}\nvlhmm: {}".format(sk_log_p, vlhmm._log_p))
+        vlhmm.fit(data, n_iter=n_iter, equal_start=False, type_emission=type_e)
+        if type_e == "Gauss":
+            print("sklearn: {}\nvlhmm: {}".format(sk_log_p, vlhmm._log_p))
         print("real_a", np.exp(model_.log_a))
+        vlhmm.plot_log_p()
+        plt.show()
+        print(type_e)
         print(T)
 
-    n, m, T = 2, 2, int(1e3)
+
+    n, m, T = 2, 2, int(2e3)
     a = np.array([[0.2, 0.8],
                   [0.6, 0.4]])
     b = np.array([[0.1, 0.9],
@@ -119,23 +117,26 @@ def test_gauss_hmm():
 
 
     model_ = HMMModel.get_model_from_real_prob(a, b)
-    data, h_states = model_.sample(T)
-    data = sample_gauss(T, n, h_states)
+    _, h_states = model_.sample(T)
+
+    data = sample_(T, n, h_states, type_emission=type_e)
+    print("data:", data)
     n_iter=100
-    sk_log_p = test_sklearn(data, n, n_iter)
-    go(fb.HMM_Gauss(n))
 
-    pass
+    if type_e == "Gauss":
+        sk_log_p = test_sklearn(data, n, n_iter)
+
+    go(fb.HMM(n))
 
 
-def test_hmm():
+def test_discrete_hmm():
     n, m, T = 3, 2, int(3e2)
     n_iter = 8
     model = HMMModel.get_random_model(n, m)
     print(model)
     data, h_states = model.sample(T)
 
-    hmm = fb.HMM(n).fit(data, n_iter+1)
+    hmm = fb.DiscreteHMM(n).fit(data, n_iter+1)
     print(hmm.model)
 
     print(HMM(n).observation_log_probability(hmm.model, data))
@@ -152,15 +153,22 @@ def test_wang_with_data_from_file(f_name):
     vlhmm.fit(data[:,np.newaxis], max_len=3, n_iter=3)
 
 
-def main_test(contexts, log_a, n=2, T=int(2e3), max_len=4):
+def main_test(contexts, log_a, n=2, T=int(2e3), max_len=4, type_e="Poisson", equal_start=False):
     def go(vlhmm):
-        vlhmm.fit(data, max_len=max_len, n_iter=15, th_prune=4e-3)
+        vlhmm.fit(data, max_len=max_len, equal_start=equal_start, n_iter=150, th_prune=4e-3, type_emission=type_e)
+        eq_st = "eq_" if equal_start else ""
+        name = "graphics/{}{}_{}_{}.jpg".format(eq_st, type_e, random.randrange(T), max_len)
+        fig = vlhmm.plot_log_p()
+        fig.savefig(name)
+        plt.show()
         print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
         print("T=", T, "max_len=", max_len)
+        print(name)
 
     h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
-    data = sample_gauss(T, n, list(map(int, h_states)))
+    data = sample_(T, n, list(map(int, h_states)), type_emission=type_e)
     go(fb.VLHMMWang(n))
+
 
 
 if __name__ == "__main__":
@@ -176,4 +184,11 @@ if __name__ == "__main__":
          [0.3, 0.6, 0.7]]
     ))
 
-    main_test(contexts, log_a)
+    contexts = ["0", "1"]
+    log_a = np.log(np.array(
+        [[0.8, 0.4],
+         [0.2, 0.6]]
+    ))
+
+    main_test(contexts, log_a, max_len=3, type_e="Poisson")
+

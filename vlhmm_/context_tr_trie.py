@@ -19,7 +19,7 @@ class ContextTransitionTrie():
                 for q in alphabet:
                     for c in gen_all_contexts(alphabet, l-1):
                         yield q+c
-        self._max_len = kwargs["max_len"] if "max_len" in kwargs else 3
+        self._max_len = kwargs.get("max_len", 3)
         self.n = kwargs["n"]
         self.alphabet = "".join(list(map(str, range(self.n))))
         self.seq_contexts = list(gen_all_contexts(self.alphabet, self._max_len))
