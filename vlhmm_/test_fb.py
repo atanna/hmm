@@ -97,19 +97,30 @@ def test_wang_with_hmm_sample():
     go(fb.VLHMMWang(n))
 
 
-def test_hmm(type_e="Poisson"):
+def test_hmm(type_e="Poisson", T=int(2e3), equal_start=False):
     def go(vlhmm):
-        vlhmm.fit(data, n_iter=n_iter, equal_start=False, type_emission=type_e)
+        vlhmm.fit(data, equal_start=equal_start, type_emission=type_e)
         if type_e == "Gauss":
             print("sklearn: {}\nvlhmm: {}".format(sk_log_p, vlhmm._log_p))
         print("real_a", np.exp(model_.log_a))
-        vlhmm.plot_log_p()
+        fig = vlhmm.plot_log_p()
+        eq_st = "eq_" if equal_start else ""
+        name = "graphics/hmm/{}/{}{}_{}.jpg"\
+            .format(type_e, eq_st, T,random.randrange(T))
+        fig.text(0.2,0.1, "{}\nstarts: {}\nT={}\nreal_a:\n{}\na:\n{}"
+                 .format(type_e,
+                         "eq" if equal_start else "k-means",
+                         T, np.exp(model_.log_a).T,
+                         np.around(np.exp(vlhmm.log_a), 3)))
         plt.show()
         print(type_e)
         print(T)
+        print(name)
+        fig.savefig(name)
+        plt.show()
 
 
-    n, m, T = 2, 2, int(2e3)
+    n, m = 2, 2
     a = np.array([[0.2, 0.8],
                   [0.6, 0.4]])
     b = np.array([[0.1, 0.9],
@@ -121,10 +132,9 @@ def test_hmm(type_e="Poisson"):
 
     data = sample_(T, n, h_states, type_emission=type_e)
     print("data:", data)
-    n_iter=100
 
     if type_e == "Gauss":
-        sk_log_p = test_sklearn(data, n, n_iter)
+        sk_log_p = test_sklearn(data, n, 100)
 
     go(fb.HMM(n))
 
@@ -153,17 +163,26 @@ def test_wang_with_data_from_file(f_name):
     vlhmm.fit(data[:,np.newaxis], max_len=3, n_iter=3)
 
 
-def main_test(contexts, log_a, n=2, T=int(2e3), max_len=4, type_e="Poisson", equal_start=False):
+def main_test(contexts, log_a, n=2, T=int(2e3), max_len=4,
+              type_e="Poisson", equal_start=False):
     def go(vlhmm):
-        vlhmm.fit(data, max_len=max_len, equal_start=equal_start, n_iter=150, th_prune=4e-3, type_emission=type_e)
+        vlhmm.fit(data, max_len=max_len, equal_start=equal_start,
+                  th_prune=4e-3, type_emission=type_e)
         eq_st = "eq_" if equal_start else ""
-        name = "graphics/{}{}_{}_{}.jpg".format(eq_st, type_e, random.randrange(T), max_len)
-        fig = vlhmm.plot_log_p()
-        fig.savefig(name)
-        plt.show()
         print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
         print("T=", T, "max_len=", max_len)
+        name = "graphics/vlhmm/{}/{}_{}_{}.jpg"\
+            .format(type_e, eq_st, random.randrange(T), max_len)
         print(name)
+        fig = vlhmm.plot_log_p()
+        fig.text(0.2, 0.1,
+                 "{}\nstarts: {}\nT={}\nreal_c: {}\nreal_a:\n{}\nc: {}\na:\n{}"
+                 .format(type_e,
+                         "eq" if equal_start else "k-means",
+                         T, contexts, np.exp(log_a),
+                         vlhmm.contexts, np.around(np.exp(vlhmm.log_a), 3)))
+        fig.savefig(name)
+        plt.show()
 
     h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
     data = sample_(T, n, list(map(int, h_states)), type_emission=type_e)
@@ -190,5 +209,14 @@ if __name__ == "__main__":
          [0.2, 0.6]]
     ))
 
-    main_test(contexts, log_a, max_len=3, type_e="Poisson")
+    contexts = [""]
+    log_a = np.log(np.array(
+        [[0.4],
+         [0.6]]
+    ))
+
+    main_test(contexts, log_a, max_len=4, equal_start=False, type_e="Gauss", T=int(7e3))
+
+# test_hmm("Gauss", T=int(4e3), equal_start=True)
+
 

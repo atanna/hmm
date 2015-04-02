@@ -138,16 +138,25 @@ class AbstractForwardBackward():
         fig = plt.figure()
 
         l = len(self.track_log_p)
-        min_y = min(map(lambda arr: mquantiles(arr, [0.2])[0], self.track_log_p.values()))
+        min_y = min(map(lambda arr: mquantiles(arr, [0.01])[0],
+                        self.track_log_p.values()))
         max_y = max(map(max, self.track_log_p.values()))
+        dy = (max_y-min_y)/8
+        min_y = int(min_y - dy)
+        max_y = int(max_y + dy)
+
         keys = sorted(self.track_log_p.keys(), reverse=True)
+
         for i, n_context in enumerate(keys):
             ax = fig.add_subplot(1, l, i+1)
-            ax.set_title("Number of contexts = {}".format(n_context))
-            ax.plot(self.track_log_p[n_context])
-            # min_y, max_y = mquantiles(self.track_log_p[n_context], [0.2, 1.])
+            ax.set_title("n_contexts = {}".format(n_context))
+            if i == 0:
+                ax.set_ylabel('log_p')
+            num = len(self.track_log_p[n_context])
+            ax.set_xlabel("{} iterations".format(num))
+            ax.plot(range(num), self.track_log_p[n_context], 'bo', range(num),
+                    self.track_log_p[n_context], 'k')
             ax.set_ylim(min_y, max_y)
-            ax.set_ylabel('log_p')
         return fig
 
 
