@@ -1,6 +1,7 @@
 import datrie
-from scipy import stats
 import numpy as np
+from pygraphviz import AGraph
+from scipy import stats
 from scipy.misc import logsumexp
 
 
@@ -279,4 +280,34 @@ class ContextTransitionTrie():
         for q in self.alphabet:
             sum += np.exp(self.log_tr_p(q, s+q_))*(self.log_tr_p(q, s+q_) - self.log_tr_p(q, s))
         return sum
+
+    @staticmethod
+    def draw_context_trie(contexts, log_a, fname=None):
+        G = AGraph(directed=True)
+        n = len(log_a)
+        a = np.exp(log_a)
+        for c in contexts:
+            v2 = c
+            for i in range(len(c)):
+                v1 = v2[:-1]
+                if v1 == "":
+                    v1 = "root"
+                G.add_edge(v1, v2, label=v2[-1])
+                v2= v1
+
+        for i, c in enumerate(contexts):
+            n_c = G.get_node(c)
+            n_c.attr["style"] = "filled"
+            for q in range(n):
+                label = "p({}| {})".format(q, c)
+                v2 = "p{}{}".format(q, c)
+                G.add_edge(c, v2, label=label)
+                n_v = G.get_node(v2)
+                n_v.attr["shape"] = "box"
+                n_v.attr["label"] = round(a[q, i], 2)
+                n_v.attr["width"] = 0.2
+                n_v.attr["height"] = 0.1
+        if fname is not None:
+            G.draw(fname, prog="dot")
+        return G
 

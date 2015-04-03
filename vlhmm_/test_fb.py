@@ -1,3 +1,4 @@
+import os
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -163,6 +164,39 @@ def test_wang_with_data_from_file(f_name):
     vlhmm.fit(data[:,np.newaxis], max_len=3, n_iter=3)
 
 
+def create_img(vlhmm, contexts, log_a, name, text):
+    fig = plt.figure()
+
+    ax = plt.subplot2grid((3, 4), (0, 0), colspan=4, rowspan=2)
+    ax.set_title("Log likelihood")
+    ax1 = plt.subplot2grid((3, 4), (2, 1))
+    ax1.set_title("Real tree")
+    ax2 = plt.subplot2grid((3, 4), (2, 2))
+    ax2.set_title("Predicted tree")
+
+    fname_plot = name+"plot_.png"
+    vlhmm.plot_log_p().savefig(fname_plot)
+    fname_real_trie = name+"real_trie_.png"
+    ContextTransitionTrie.draw_context_trie(contexts, log_a, fname_real_trie)
+    fname_trie = name+"trie_.png"
+    ContextTransitionTrie.draw_context_trie(vlhmm.contexts, vlhmm.log_a, fname_trie)
+
+
+    ax.imshow(plt.imread(fname_plot))
+    ax1.imshow(plt.imread(fname_real_trie))
+    ax2.imshow(plt.imread(fname_trie))
+
+    # os.remove(fname_plot)
+    # os.remove(fname_trie)
+    # os.remove(fname_real_trie)
+
+    for i, ax in enumerate(fig.axes):
+            for tl in ax.get_xticklabels() + ax.get_yticklabels():
+                tl.set_visible(False)
+    fig.text(0.20, 0.095, text)
+    return fig
+
+
 def main_test(contexts, log_a, n=2, T=int(2e3), max_len=4,
               type_e="Poisson", equal_start=False):
     def go(vlhmm):
@@ -171,17 +205,13 @@ def main_test(contexts, log_a, n=2, T=int(2e3), max_len=4,
         eq_st = "eq_" if equal_start else ""
         print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
         print("T=", T, "max_len=", max_len)
-        name = "graphics/vlhmm/{}/{}_{}_{}.jpg"\
-            .format(type_e, eq_st, random.randrange(T), max_len)
+
+        name = "graphics/vlhmm/{}/{}{}".format(type_e, eq_st, random.randrange(T))
         print(name)
-        fig = vlhmm.plot_log_p()
-        fig.text(0.2, 0.1,
-                 "{}\nstarts: {}\nT={}\nreal_c: {}\nreal_a:\n{}\nc: {}\na:\n{}"
-                 .format(type_e,
-                         "eq" if equal_start else "k-means",
-                         T, contexts, np.exp(log_a),
-                         vlhmm.contexts, np.around(np.exp(vlhmm.log_a), 3)))
-        fig.savefig(name)
+        text = "{}\nT = {}\ninit: {}\n".format(type_e, T,
+                         "equal" if equal_start else "k-means")
+        fig = create_img(vlhmm, contexts, log_a, name, text)
+        fig.savefig(name+".jpg")
         plt.show()
 
     h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
@@ -209,14 +239,10 @@ if __name__ == "__main__":
          [0.2, 0.6]]
     ))
 
-    contexts = [""]
-    log_a = np.log(np.array(
-        [[0.4],
-         [0.6]]
-    ))
+    # contexts = [""]
+    # log_a = np.log(np.array(
+    #     [[0.4],
+    #      [0.6]]
+    # ))
 
-    main_test(contexts, log_a, max_len=4, equal_start=False, type_e="Gauss", T=int(7e3))
-
-# test_hmm("Gauss", T=int(4e3), equal_start=True)
-
-
+    main_test(contexts, log_a, max_len=4, equal_start=False, type_e="Gauss", T=int(4e3))
