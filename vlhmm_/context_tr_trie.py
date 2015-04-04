@@ -168,6 +168,14 @@ class ContextTransitionTrie():
             return sorted(candidates, key=lambda x: -x[1])[0][0]
             # first least context with the same prefix
 
+    def get_list_c(self, s):
+        try:
+            return [self.contexts.longest_prefix(s)]
+        except KeyError:
+            candidates = self.contexts.keys(s)
+            assert len(candidates) > 0
+            return candidates
+
     def get_contexts(self, X):
         n = len(X)
         c = ""
@@ -195,9 +203,12 @@ class ContextTransitionTrie():
 
         return diff
 
-    def count_log_a(self, equal=False):
-        if equal or "log_c_tr_trie" not in self.__dict__:
+    def count_log_a(self, type=False):
+        if type=="equal" or "log_c_tr_trie" not in self.__dict__:
             log_a = np.ones((self.n, self.n_contexts))
+        elif type == "rand":
+            log_a = np.random.random((2, self.n_contexts))
+            log_a = np.log(log_a/log_a.sum(axis=0))
         else:
             log_a = np.array(
                 [[self.log_tr_p(q, self.seq_contexts[l])
@@ -295,11 +306,16 @@ class ContextTransitionTrie():
                 G.add_edge(v1, v2, label=v2[-1])
                 v2= v1
 
-        for i, c in enumerate(contexts):
+        for i, c_ in enumerate(contexts):
+            if c_ == "":
+                c = "root"
+                G.add_node(c)
+            else:
+                c = c_
             n_c = G.get_node(c)
             n_c.attr["style"] = "filled"
             for q in range(n):
-                label = "p({}| {})".format(q, c)
+                label = "p({}/ {})".format(q, c_)
                 v2 = "p{}{}".format(q, c)
                 G.add_edge(c, v2, label=label)
                 n_v = G.get_node(v2)

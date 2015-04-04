@@ -24,6 +24,9 @@ class Emission():
     def set_rand_params(self):
         pass
 
+    def get_order(self):
+        pass
+
     def log_p(self, y, l):
         """
         :param y: observation
@@ -79,7 +82,7 @@ class GaussianEmission(Emission):
             mu.append(([random.randrange(_var / self.n),
                      random.randrange(_var / self.n)] + np.random.random((self.n,))) * _var)
             sigma.append(np.random.random((self.n, self.n)) * _var)
-        self.mu  = np.array(mu)
+        self.mu  = np.array(sorted(mu, key=lambda x: x[0]))
         self.sigma = np.array(sigma)
 
     def log_p(self, y, state):
@@ -90,6 +93,9 @@ class GaussianEmission(Emission):
 
     def sample(self, state, size=1):
         return np.array(multivariate_normal.rvs(self.mu[state], self.sigma[state], size))
+
+    def get_order(self):
+        return list(map(lambda x: x[1], sorted(zip(self.mu, range(self.n_states)), key=lambda x: x[0][0])))
 
 
 class PoissonEmission(Emission):
@@ -123,6 +129,7 @@ class PoissonEmission(Emission):
 
     def set_rand_params(self, _var=10.):
         self.alpha = np.abs(np.random.random(self.n_states)) * _var
+        self.alpha = np.sort(self.alpha)
 
     def log_p(self, y, state):
         return poisson.logpmf(y, self.alpha[state])
@@ -133,6 +140,8 @@ class PoissonEmission(Emission):
     def sample(self, state, size=1):
         return np.array(poisson.rvs(self.alpha[state], size=size))
 
+    def get_order(self):
+        return list(map(lambda x: x[1], sorted(zip(self.alpha, range(self.n_states)), key=lambda x: x[0])))
 
 class AbstractVLHMM():
     def __init__(self, n):

@@ -35,21 +35,30 @@ class AbstractForwardBackward():
 
     def _init_emission(self, type_emission):
         if type_emission == "Poisson":
-            if self.equal_start:
+            if self.start == "equal":
                 self.emission = PoissonEmission(self.data, n_states=self.n)
                 return
             self.emission = PoissonEmission(self.data, self.X, self.n)
             return
 
-        if self.equal_start:
+        if self.start == "equal":
             self.emission = GaussianEmission(self.data, n_states=self.n)
             return
         self.emission = GaussianEmission(self.data, self.X, self.n)
         print("init_mu = {}..\ninit_sigma = {}..\n".format(
             self.emission.mu, self.emission.sigma))
 
-    def fit(self, data, n_iter=150, X=None, log_pr_thresh=1e-2, equal_start=False, type_emission="Poisson"):
-        self.equal_start = equal_start
+    def fit(self, data, n_iter=150, X=None, log_pr_thresh=1e-2, start="k-means", type_emission="Poisson"):
+        """
+        :param data:
+        :param n_iter:
+        :param X: start hidden states
+        :param log_pr_thresh: threshold for pruning
+        :param start: {"k-means", "equal", "rand"}
+        :param type_emission:
+        :return:
+        """
+        self.start = start
         if X is not None:
             self.X = X
         else:
@@ -162,7 +171,7 @@ class AbstractForwardBackward():
 
 class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _init(self, data):
-        if self.equal_start:
+        if self.start != "equal":
             self.tr_trie = \
                 ContextTransitionTrie(None, max_len=self.max_len, n=self.n)
         else:
@@ -175,7 +184,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.log_context_p = np.log(np.ones(self.n_contexts) / self.n_contexts)
 
         super()._init(data)
-
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
         print("n_contexts:", self.n_contexts)
         print("contexts: {}".format(self.contexts))
         print("a: \n{}".format(np.exp(self.log_a)))
@@ -184,7 +193,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         return self.n_contexts
 
     def _init_a(self):
-        self.log_a = self.tr_trie.count_log_a()
+        self.log_a = self.tr_trie.count_log_a(self.start)
 
     def fit(self, data, max_len=4, n_iter=55, th_prune=1e-2, log_pr_thresh=1e-2, **kwargs):
         self.max_len = max_len
@@ -194,6 +203,23 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
             self._em(n_iter, log_pr_thresh)
             self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
         return self
+
+    @staticmethod
+    def get_sorted_contexts_and_log_a(contexts, log_a, order):
+        n = len(log_a)
+        d = dict(zip(order, range(n)))
+        new_contexts =  []
+        for c in contexts:
+            new_c = "".join(list(map(lambda q: str(d[int(q)]), c)))
+            new_contexts.append(new_c)
+        new_log_a = log_a[order, :]
+
+        tmp = sorted(zip(new_contexts, range(len(contexts))))
+        new_contexts = list(map(lambda x: x[0], tmp))
+        order = list(map(lambda x: x[1], tmp))
+        new_log_a = new_log_a[:,order]
+
+        return new_contexts, new_log_a
 
     def sample(self, size, start=0):
         X = np.zeros((size, self.emission.n))
@@ -222,20 +248,17 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         return prune
 
     def update_contexts(self):
-        contexts = list(self.tr_trie.seq_contexts)
-        n_contexts = len(contexts)
-        id_c = dict(zip(contexts, range(n_contexts)))
+        self.contexts = list(self.tr_trie.seq_contexts)
+        self.n_contexts = len(self.contexts)
+        self.id_c = dict(zip(self.contexts, range(self.n_contexts)))
         self.log_a = self.tr_trie.count_log_a()
-        self.contexts = contexts
-        if n_contexts > 1:
+        if self.n_contexts > 1:
             self.state_c = list(map(lambda c: int(c[0]), self.contexts))
-        self.n_contexts = n_contexts
-        self.id_c = id_c
         self.log_alpha = np.zeros((self.T, self.n_contexts))
         self.log_beta = np.zeros((self.T, self.n_contexts))
         self.log_gamma = np.zeros((self.T, self.n_contexts))
         self.log_ksi = np.zeros((self.T, self.n, self.n_contexts))
-        self.log_context_p = np.log(np.ones(n_contexts) / n_contexts)
+        self.log_context_p = np.log(np.ones(self.n_contexts) / self.n_contexts)
 
     def _update_first_alpha(self, i):
         self.log_alpha[0][i] = \
@@ -246,13 +269,19 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.log_alpha[t + 1][i] = np.log(0.)
         c = self.contexts[i]
         for q in range(self.n):
-            c_ = self.get_c(c[1:], q)
-            i_ = self.id_c[c_]
-            self.log_alpha[t + 1][i] = np.logaddexp(
-                self.log_alpha[t + 1][i],
-                self.log_alpha[t][i_]
-                + self.log_a[int(c[0]), i_]
-                + self.emission.log_p(self.data[t + 1], self.state_c[i]))
+            for c_ in self.tr_trie.get_list_c(c[1:]+str(q)):
+                i_ = self.id_c[c_]
+                if len(c_) > t:
+                    c_ = c_[:t]
+                    log_transition = self.tr_trie.log_tr_p(c[0], c_)
+                else:
+                    log_transition = self.log_a[int(c[0]), i_]
+
+                self.log_alpha[t + 1][i] = np.logaddexp(
+                    self.log_alpha[t + 1][i],
+                    self.log_alpha[t][i_]
+                    + log_transition
+                    + self.emission.log_p(self.data[t + 1], self.state_c[i]))
     
     def _update_beta(self, t, i):
         self.log_beta[t][i] = np.log(0.)
@@ -277,6 +306,10 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
                                 self.log_a[q,i] + \
                                 self.emission.log_p(self.data[t+1], q) + \
                                 self.log_beta[t+1, q]
+
+    def update_tr_params(self):
+        super().update_tr_params()
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
 
     def update_emission_params(self):
         gamma = np.zeros((self.T, self.n))
