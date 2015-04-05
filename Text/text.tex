@@ -157,7 +157,10 @@ $ P(X_{t} = x_{t}|X_{t-1}=x_{t-1},X_{t-2}=x_{t-2} ... X_{t-m+1}=x_{t-m+1}) $
 \\\\
 {\large Алгоритм:}
 \\
-Параметры алгоритма: $ m $ - максимальная длина контекста, $ \epsilon $ - барьер для обрезания
+Параметры алгоритма: 
+$ m $ - максимальная длина контекста, 
+$ \epsilon_{EM} $ - барьер для остановки EM,
+$ \epsilon_{prune} $ - барьер для обрезания дерева
 \\
 \begin{enumerate}
 \item Инициализация контекстов.
@@ -171,7 +174,10 @@ $ C_{0} = \{c| c\in S^{m}\}$
 \\
 Пересчет производится подобно алгоритму Baum-Welch для HMM
 \\
-Вводятся дополнительные параметры
+\begin{enumerate}
+\item Expectation
+\\
+Вводятся дополнительные параметры:
 \\
 $ \alpha_{t}(c) = P(y_{1}^{t}, c(x_{t})=c| \Lambda)$
 \\
@@ -184,26 +190,29 @@ $ \xi_{t}(q,c) = P(c(x_{t})=c, x_{t+1} = q| Y, \Lambda)$
 с помощью которых итеративно пересчитываются параметры модели
 \\
 $ \alpha_{0}(c) = p(c)b(y_{0},c)$, 
-$ \alpha_{t+1}(c) = \sum_{q \in S, c'=C(cq)}{\alpha_{t}(c')a(c[0],c')b(y_{t+1},c)}$
+$ \alpha_{t+1}(c) = \sum_{q \in S, c'=C(cq)}{\alpha_{t}(c')a(c[0],c')b(y_{t+1},c[0])}$
 \\
 $ \beta_{T}(c) = 1$, 
-$ \beta_{t}(c) = \sum_{q \in S, c'=C(qs)}{a(q,c)b(y_{t+1}, c')\beta_{t+1}(c')}$
+$ \beta_{t}(c) = \sum_{q \in S, c'=C(qc)}{a(q,c)b(y_{t+1}, c'[0])\beta_{t+1}(c')}$
 \\
 $p = P(Y|\Lambda) = \sum_{c \in C}\alpha_{T}(c)$
 \\ 
 $ \gamma_{t}(c) = \frac{\alpha_{t}(c)\beta_{t}(c)}{p}$
 \\
 $p(c) = \sum_{t}\gamma_{t}(c)$
+\item Maximization
 \\
 $ \xi_{t}(q,c) = \frac{\alpha_{t}(c)a(q,c)b(y_{t+1},c)\beta_{t+1}(qc)}{p} $
 \\
 $ a(q, c) = \frac{\sum_{t}\xi_{t}(q,c)}{p(c)}$
 \\
 Пересчет $ B $ зависит от принятого семейства моделей испусканий. Производится с помощью $ \gamma $ в точности также как и в алгоритме Baum-Welch.
+\end{enumerate}
+Пересчет EM проходит до тех пор пока разница правдоподобий между итерациями не будет меньше $ \epsilon_{EM}$
 \\
 \item Обрезание дерева.
 \\
-Если существует внутренний лист $ s $ такой, что $ \forall q \in S \; kl(sq, s) < \epsilon $ (дети не уточняют родителя), то $ s $ становитcя листом, а все его потомки обрезаются.
+Если существует внутренний лист $ s $ такой, что $ \forall q \in S \; kl(sq, s) < \epsilon_{prune} $ (дети не уточняют родителя), то $ s $ становитcя листом, а все его потомки обрезаются.
 \\
 $kl(u, w) = \sum_{q' \in S} P(q'|u) log\frac{P(q'|u)}{P(q'|w)}$ - расстояния Кульбака-Лейблера для апостериорных распределений.
 \\
@@ -233,50 +242,84 @@ $ p(q|s) = \frac{\sum_{c \in C(s)} {p(q|c)}}{\sum_q\sum_{c \in C(s)} {p(q|c)}} $
 
 
 \section{Simulation}
-Проиллюстрируем работу модели на искусcтвенных данных.
-\\
-Из дерева \ref{ris:img_eq_Gauss_real_tree} была просэмплирована выборка размером $ T = 4000$ с Гауссовскими распределениями испусканий. Обучение проходило, начиная с контекстов длины 4. 
-\\
-Обученное дерево представлено на рисунке \ref{ris:img_eq_Gauss_predicted_tree}
-\\
-Из рисунка \ref{ris:img_eq_Gauss_plot} видно, что модель сначала 24 итерации обучалась на 16 контекстах длины 4, потом шаг обрезания сократил количество контекство до 3, и модель еще 16 итераций обучалась на них
-\\
-Здесь инициализация распределений переходов была равномерная. Если ее задавать с помощью алгоритма k-means, то сходимость на первом наборе контекстов будет заметно быстрее. Это видно из рисунка \ref{ris:img_Gauss}.
-\footnote{Здесь можно подумать, что последние итерации лишние. Да, возможно так и есть. Барьер для остановки EM в эксперименте стоял $ 1e-2 $}
-\\
-Общее падение правдоподобия незначительно.
+Ниже приведено несколько примеров результата обучения алгоритма VOHMM по выборке, построенной по фиксированному дереву.
+\\  
+Приведено сравнение реальных даеревьев и деревьев предсказанных алгоритмом, и график роста правдоподобия на всех итерациях. В качестве распределений испусканий выбраны двумерное распределение Гаусса и одномерное распределение Пуассона.
+\begin{enumerate}
+\item Смесь. Рисунки \ref{ris:img_mixture_Poisson} и \ref{ris:img_mixture_Gauss}
+\\Начальное дерево: единственный пустой контекст "". Длина сэмплированной выборки $ T = 4000$. 
+\\Параметры алгоритма: максимальная длина контекстов $ m  = 2$, барьер для обрезания $ \epsilon_{prune} = 0.004$, барьер для остановки EM $ \epsilon_{EM} =  0.01 $ (сравнение идет по логарифму правдоподобия)      
+
 \begin{figure}[ht]\centering
 	\parbox[b]{ 0.49 \textwidth}{
-	\includegraphics[scale=0.3]{img/eq_3676real_trie_.png}
+	\includegraphics[scale=0.3]{img/mixture_Poisson.jpg}
 	\centering
-	\caption{Real tree}
-	\label{ris:img_eq_Gauss_real_tree}
+	\caption{Смесь двух распределений Пуассона}
+	\label{ris:img_mixture_Poisson}
 	
 	}
 \hfil \hfil%раздвигаем боксы по горизонтали
 \begin{minipage}[b]{0.49 \textwidth}
-	\includegraphics[scale=0.3]{img/eq_3676trie_.png}
+	\includegraphics[scale=0.3]{img/mixture_Gauss.jpg}
 	\centering
-	\caption{Predicted tree}
-	\label{ris:img_eq_Gauss_predicted_tree}
+	\caption{Смесь двух Гауссиан}
+	\label{ris:img_mixture_Gauss}
 \end{minipage}
 \end{figure}
-
-
-\begin{figure}[hbtp]
-\includegraphics[scale=0.4]{img/eq_3676plot_.png}
-\centering
-\caption{Log likelihood}
-\label{ris:img_eq_Gauss_plot}
+\item
+Более интересный случай. Рисунки \ref{ris:img_real_trie}, \ref{ris:img_predicted_trie}, \ref{ris:img_log_likelihood}
+\\Начальное дерево глубины 3, распределения испусканий - двумерное гауссовское, $ T=400 $
+\\Параметры алгоритма: m = 4
+\begin{figure}[ht]\centering
+	\parbox[b]{ 0.49 \textwidth}{
+	\includegraphics[scale=0.3]{img/sim_real_trie.png}
+	\centering
+	\caption{ Реальное дерево }
+	\label{ris:img_real_trie}
+	
+	}
+\hfil \hfil%раздвигаем боксы по горизонтали
+\begin{minipage}[b]{0.49 \textwidth}
+	\includegraphics[scale=0.3]{img/sim_predicted_trie.png}
+	\centering
+	\caption{ Предсказанное дерево }
+	\label{ris:img_predicted_trie}
+\end{minipage}
 \end{figure}
-
-
 \begin{figure}[hbtp]
-\includegraphics[scale=0.4]{img/583.jpg}
-\centering
-\caption{Общий график для теста с инициализацией алгоритмом k-means}
-\label{ris:img_Gauss}
+	\includegraphics[scale=0.4]{img/sim_likelihood.png}
+	\centering
+	\caption{ График роста логарифма правдоподобия }
+\label{ris:img_log_likelihood}
 \end{figure}
+\\
+Замечание. Взяв в качестве инициализации алгоритм k-means, можно было сойтись быстрее (например, за 6 итераций), но она годится не для всех распределений испусканий
+\end{enumerate}
+\section{Chip-seq, реальные данные}
+В ходе работы была рассмотрена 21-ая хромосома *кого-то там*.
+\\Данные - просумированные индикаторы начальных позиций ридов, объедененные в бины размером 10000.
+\\Применение модели VOHMM к такой выборке дало следующие результаты:
+\begin{enumerate}
+\item
+Случай в котором рассматриваются два состояния - наличие/отсутствие сигнала.
+Рисунок \ref{ris:real_2_states}
+\begin{figure}[hиtз]
+	\includegraphics[scale=0.3]{img/real_2_states.png}
+	\centering
+	\caption{ Дерево с двумя состояниями }
+	\label{ris:real_2_states}
+\end{figure}
+\item
+Случай в котором рассматриваются три состояния - наличие сигнала/шум/отсутствие сигнала.
+Рисунок \ref{ris:real_3_states}
+\begin{figure}[hиtз]
+	\includegraphics[scale=0.3]{img/real_3_states.png}
+	\centering
+	\caption{ Дерево с двумя состояниями }
+	\label{ris:real_3_states}
+\end{figure}
+\end{enumerate}
+
 
 \section{Оценка модели}
 
