@@ -66,6 +66,7 @@ class ContextTransitionTrie():
         the minimum number of occurrences for context
         :return:
         """
+        print("build trie...")
         _data = data[::-1]
         self.alphabet = sorted(list(set(_data)))
         self.n = len(self.alphabet)
@@ -152,7 +153,7 @@ class ContextTransitionTrie():
                 if np.isnan(log_sum_p_):
                     continue
                 denom = np.logaddexp(denom, log_sum_p_)
-            assert denom > -np.inf, "{}".format(q+s)
+            assert denom > -np.inf, "q={}s={}".format(q,s)
             res = res - denom
             self._log_tr_trie[qs] = res
             return res
@@ -203,13 +204,13 @@ class ContextTransitionTrie():
 
         return diff
 
-    def count_log_a(self, type=False):
-        if type=="equal" or "log_c_tr_trie" not in self.__dict__:
+    def count_log_a(self, type=""):
+        if type=="equal" :
             log_a = np.ones((self.n, self.n_contexts))
-        elif type == "rand":
-            log_a = np.random.random((2, self.n_contexts))
-            log_a = np.log(log_a/log_a.sum(axis=0))
+        elif type == "rand" or "log_c_tr_trie" not in self.__dict__:
+            log_a = np.random.random((self.n, self.n_contexts))
         else:
+            print(self.alphabet)
             log_a = np.array(
                 [[self.log_tr_p(q, self.seq_contexts[l])
                   for l in range(self.n_contexts)]
@@ -249,8 +250,8 @@ class ContextTransitionTrie():
         return "".join(map(str, X))
 
     @staticmethod
-    def sample_(size, contexts, log_a):
-        return ContextTransitionTrie(n=2).recount_with_log_a(log_a, contexts).sample(size)
+    def sample_(size, contexts, log_a, n=2):
+        return ContextTransitionTrie(n=n).recount_with_log_a(log_a, contexts).sample(size)
 
     def prune(self, K=1e-4):
         def f(s):

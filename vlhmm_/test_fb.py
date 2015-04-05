@@ -207,7 +207,7 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
         return fig
 
 
-def main_test(contexts, log_a, n=2, T=int(2e3), max_len=4,
+def main_test(contexts, log_a, T=int(2e3), max_len=4,
               type_e="Poisson", start="k-means", save_data=False):
     def go(vlhmm):
         print(type_e)
@@ -225,6 +225,7 @@ def main_test(contexts, log_a, n=2, T=int(2e3), max_len=4,
             data_to_file(name+".txt")
         plt.show()
 
+    n= len(log_a)
     h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
     data = sample_(T, n, list(map(int, h_states)), type_emission=type_e)
     go(fb.VLHMMWang(n))
@@ -237,7 +238,7 @@ if __name__ == "__main__":
         [[0.8, 0.4, 0.3, 0.2, 0.9],
          [0.2, 0.6, 0.7, 0.8, 0.1]]
     ))
-
+    #
     # contexts = ["00", "01", "1"]
     # log_a = np.log(np.array(
     #     [[0.7, 0.4, 0.3],
@@ -249,20 +250,36 @@ if __name__ == "__main__":
     #     [[0.8, 0.4],
     #      [0.2, 0.6]]
     # ))
+    #
+    # contexts = ["0", "1", "2"]
+    # log_a = np.log(np.array(
+    #     [[0.1, 0.3, 0.4],
+    #      [0.3 , 0.1, 0.5],
+    #      [0.6, 0.6, 0.1]]
+    # ))
+    #
+    # contexts = [""]
+    # log_a = np.log(np.array(
+    #     [[0.1],
+    #      [0.3],
+    #      [0.6]]
+    # ))
+    #
+    # contexts = [""]
+    # log_a = np.log(np.array(
+    #     [[0.4],
+    #      [0.6]]
+    # ))
 
-    contexts = [""]
-    log_a = np.log(np.array(
-        [[0.4],
-         [0.6]]
-    ))
+    # main_test(contexts, log_a, max_len=3, start="rand", type_e="Gauss", T=int(1e3))
 
 
     # log_a = np.random.random((2, len(contexts)))
     # log_a = np.log(log_a/log_a.sum(axis=0))
     # print(np.exp(log_a))
 
-    # main_test(contexts, log_a, max_len=1, start="rand", type_e="Gauss", T=int(1e3))
-    # main_test(contexts, log_a, max_len=2, equal_start=True, type_e="Poisson", T=int(1e3))
+    # main_test(contexts, log_a, max_len=4, start="rand", type_e="Gauss", T=int(4e3))
+    # main_test(contexts, log_a,  max_len=2, start="equal", type_e="Poisson", T=int(1e3))
 
 
 
@@ -290,23 +307,33 @@ def get_data(fname="resources/ENCFF000AWF.bam", chr_i=20, bin_size=10000):
 
         return x
 
+
 def test_wang_with_data_from_file(f_name, type_e="Poisson", max_len=3, start="k-means"):
     data = data_from_file(f_name)
     print(len(data))
-    n=2
+    T = len(data)
+    X = []
+    thr = 60
+    for y in data:
+        if y == 0:
+            X.append('0')
+        elif y < thr:
+            X.append('1')
+        else:
+            X.append('2')
+    X = "".join(X)
+    n=3
     vlhmm = fb.VLHMMWang(n)
-
+    print(start)
     vlhmm.fit(data, max_len=max_len, start=start,
-              th_prune=4e-3, type_emission=type_e)
+              th_prune=0.1, type_emission=type_e)
     print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
     print("T=", len(data), "max_len=", max_len)
 
     name = "graphics/real/{}{}".format(start, random.randrange(100))
     print(name)
-    fig = create_img(vlhmm, name=name)
-    fig.savefig(name+".jpg")
-    plt.show()
+    create_img(vlhmm, name=name)
 
 
-# test_wang_with_data_from_file("resources/chr21_10000.txt", max_len=3, start="k-means")
+test_wang_with_data_from_file("resources/chr21_10000.txt", max_len=3, start="k-means", type_e="Poisson")
 

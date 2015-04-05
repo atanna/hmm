@@ -24,7 +24,7 @@ class AbstractForwardBackward():
         self.log_ksi = np.zeros((self.T, self.n, self.n_contexts))
         self.track_log_p = defaultdict(list)
 
-    def _init_X(self, data):
+    def _init_X(self, data, start):
         pass
 
     def _get_n_contexts(self):
@@ -35,18 +35,11 @@ class AbstractForwardBackward():
 
     def _init_emission(self, type_emission):
         if type_emission == "Poisson":
-            if self.start == "equal":
-                self.emission = PoissonEmission(self.data, n_states=self.n)
-                return
             self.emission = PoissonEmission(self.data, self.X, self.n)
-            return
-
-        if self.start == "equal":
-            self.emission = GaussianEmission(self.data, n_states=self.n)
-            return
-        self.emission = GaussianEmission(self.data, self.X, self.n)
-        print("init_mu = {}..\ninit_sigma = {}..\n".format(
-            self.emission.mu, self.emission.sigma))
+        else:
+            self.emission = GaussianEmission(self.data, self.X, self.n)
+            print("init_mu = {}..\ninit_sigma = {}..\n".format(
+                self.emission.mu, self.emission.sigma))
 
     def fit(self, data, n_iter=150, X=None, log_pr_thresh=1e-2, start="k-means", type_emission="Poisson"):
         """
@@ -62,7 +55,7 @@ class AbstractForwardBackward():
         if X is not None:
             self.X = X
         else:
-            self._init_X(data)
+            self._init_X(data, start)
         self._init(data)
         self._init_emission(type_emission)
         self._em(n_iter, log_pr_thresh)
@@ -171,7 +164,7 @@ class AbstractForwardBackward():
 
 class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _init(self, data):
-        if self.start != "equal":
+        if self.start != "k-means":
             self.tr_trie = \
                 ContextTransitionTrie(None, max_len=self.max_len, n=self.n)
         else:
@@ -194,6 +187,8 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
 
     def _init_a(self):
         self.log_a = self.tr_trie.count_log_a(self.start)
+        print(len(self.log_a))
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
 
     def fit(self, data, max_len=4, n_iter=55, th_prune=1e-2, log_pr_thresh=1e-2, **kwargs):
         self.max_len = max_len
@@ -327,15 +322,18 @@ class HMM(AbstractForwardBackward):
     def _init(self, data):
         super()._init(data)
 
-    def _init_X(self, data):
-        try:
-            centre, labels = kmeans2(data, self.n)
-        except TypeError:
+    def _init_X(self, data, start):
+        if start == "k-means":
+            try:
+                centre, labels = kmeans2(data, self.n)
+            except TypeError:
+                labels= np.random.choice(range(self.n), len(data))
+        else:
             labels= np.random.choice(range(self.n), len(data))
         self.X = "".join(list(map(str, labels)))
 
     def _init_a(self):
-        if self.equal_start:
+        if self.start == "start":
             self.log_a = np.log(np.ones((self.n, self.n)) / self.n)
             self.log_pi = np.log(np.ones(self.n) / self.n)
             return

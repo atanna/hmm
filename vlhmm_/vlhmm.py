@@ -151,10 +151,13 @@ class AbstractVLHMM():
         """
         self.n = n
 
-    def _init_X(self, data):
-        try:
-            centre, labels = kmeans2(data, self.n)
-        except TypeError:
+    def _init_X(self, data, start):
+        if start == "k-means":
+            try:
+                centre, labels = kmeans2(data, self.n)
+            except TypeError:
+                labels= np.random.choice(range(self.n), len(data))
+        else:
             labels= np.random.choice(range(self.n), len(data))
         self.X = "".join(list(map(str, labels)))
 
