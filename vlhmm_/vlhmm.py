@@ -1,6 +1,8 @@
 import random
 import numpy as np
+import pylab as plt
 from functools import reduce
+import scipy
 from scipy.cluster.vq import kmeans2
 from scipy.stats import multivariate_normal, poisson
 
@@ -9,7 +11,7 @@ class Emission():
     def __init__(self, data=None, labels=None, n_states=None):
         self.n_states = n_states
         if data is None:
-            return
+            return self
         if labels is None:
             labels = [random.choice(range(n_states)) for i in range(len(data))]
         if n_states is None:
@@ -19,6 +21,9 @@ class Emission():
         self._init_params(data)
 
     def _init_params(self, data):
+        pass
+
+    def get_str_params(self):
         pass
 
     def set_rand_params(self):
@@ -37,6 +42,10 @@ class Emission():
 
 
 class GaussianEmission(Emission):
+    def __init__(self, *args, **kwargs):
+        self.name = "Gauss"
+        super().__init__(*args, **kwargs)
+
     def _set_params(self, mu, sigma):
         self.n_states = len(mu)
         self.n = mu.shape[1]
@@ -85,6 +94,10 @@ class GaussianEmission(Emission):
         self.mu  = np.array(sorted(mu, key=lambda x: x[0]))
         self.sigma = np.array(sigma)
 
+    def get_str_params(self):
+        order = self.get_order()
+        return "mu:\n{}\nsigma:\n{}".format(np.round(self.mu[order],1), np.round(self.sigma[order],1))
+
     def log_p(self, y, state):
         return multivariate_normal.logpdf(y, self.mu[state], self.sigma[state])
 
@@ -97,11 +110,32 @@ class GaussianEmission(Emission):
     def get_order(self):
         return list(map(lambda x: x[1], sorted(zip(self.mu, range(self.n_states)), key=lambda x: x[0][0])))
 
+    def show(self, rihgt_order=True, n=1000, col=0):
+        if rihgt_order:
+            order = self.get_order()
+            mu, sigma = self.mu[order], self.sigma[order]
+        else:
+            mu, sigma = self.mu, self.sigma
+        if mu.ndim > 1:
+            mu = mu[:,col], sigma = sigma[col, col]
+        fig = plt.figure()
+        min_x = np.min(mu-3*sigma)
+        max_x = np.max(mu+3*sigma)
+        x = np.linspace(min_x, max_x, n)
+        for i, (m, var) in enumerate(zip(mu, sigma)):
+            y = scipy.stats.norm.pdf(x, m, var)
+            plt.plot(x, y, label="state {},  ({}, {})".format(i, np.round(m,2), np.round(var,2)))
+        plt.legend(loc='upper right')
+        return fig
+
 
 class PoissonEmission(Emission):
     """
     1-dim
     """
+    def __init__(self, *args, **kwargs):
+        self.name = "Poisson"
+        super().__init__(*args, **kwargs)
 
     def _set_params(self, alpha):
         self.n_states = len(alpha)
@@ -131,6 +165,10 @@ class PoissonEmission(Emission):
         self.alpha = np.abs(np.random.random(self.n_states)) * _var
         self.alpha = np.sort(self.alpha)
 
+    def get_str_params(self):
+        order = self.get_order()
+        return "alpha: {}".format(np.round(self.alpha[order], 1))
+
     def log_p(self, y, state):
         return poisson.logpmf(y, self.alpha[state])
 
@@ -142,6 +180,21 @@ class PoissonEmission(Emission):
 
     def get_order(self):
         return list(map(lambda x: x[1], sorted(zip(self.alpha, range(self.n_states)), key=lambda x: x[0])))
+
+    def show(self, right_order=True):
+        fig = plt.figure()
+        if right_order:
+            alpha = self.alpha[self.get_order()]
+        else:
+            alpha = self.alpha
+        max_x = int(2*max(alpha)+1)
+        x = np.array(list(range(max_x)))
+        for i, alph in enumerate(alpha):
+            y = poisson.pmf(x, alph)
+            plt.plot(x, y, "o",  label="state {}, alpha={}".format(i, np.round(alph,2)))
+            plt.vlines(x, [0], y)
+        plt.legend(loc='upper right')
+        return fig
 
 class AbstractVLHMM():
     def __init__(self, n):

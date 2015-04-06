@@ -153,7 +153,7 @@ class ContextTransitionTrie():
                 if np.isnan(log_sum_p_):
                     continue
                 denom = np.logaddexp(denom, log_sum_p_)
-            assert denom > -np.inf, "q={}s={}".format(q,s)
+            assert denom > -np.inf, "q={}s={}  {}\n{}".format(q,s, res, self.log_c_tr_trie.items())
             res = res - denom
             self._log_tr_trie[qs] = res
             return res
@@ -174,7 +174,6 @@ class ContextTransitionTrie():
             return [self.contexts.longest_prefix(s)]
         except KeyError:
             candidates = self.contexts.keys(s)
-            assert len(candidates) > 0
             return candidates
 
     def get_contexts(self, X):
@@ -210,7 +209,6 @@ class ContextTransitionTrie():
         elif type == "rand" or "log_c_tr_trie" not in self.__dict__:
             log_a = np.random.random((self.n, self.n_contexts))
         else:
-            print(self.alphabet)
             log_a = np.array(
                 [[self.log_tr_p(q, self.seq_contexts[l])
                   for l in range(self.n_contexts)]
@@ -263,9 +261,9 @@ class ContextTransitionTrie():
                     break
             else:
                 for q in self.alphabet:
-                    self.log_c_tr_trie[q+s] = self.log_tr_p(q, s)
+                    changed_tr[q+s] = self.log_tr_p(q, s)
                     for q_ in self.alphabet:
-                        c_to_del.update(self.log_c_tr_trie.keys(q+s+q_))
+                        c_to_del[q+s+q_]=1
                 return True
             return False
 
@@ -273,13 +271,19 @@ class ContextTransitionTrie():
             return False
         n_prune = 0
         used = set()
-        c_to_del = set()
+        changed_tr = datrie.Trie(self.alphabet)
+        c_to_del = datrie.Trie(self.alphabet)
         for c in self.contexts.keys():
             if f(c[:-1]):
                 n_prune += 1
-
-        for c in c_to_del:
-            self.log_c_tr_trie._delitem(c)
+        if n_prune == 0:
+            return False
+        for qc, log_p in changed_tr.items():
+            if len(c_to_del.prefixes(qc)) == 0:
+                self.log_c_tr_trie[qc] = log_p
+        for c in c_to_del.keys():
+            for s in list(self.log_c_tr_trie.keys(c)):
+                self.log_c_tr_trie._delitem(s)
         self.contexts = datrie.Trie(self.alphabet)
         for s in self.log_c_tr_trie.keys():
             self.contexts[s[1:]] = 1

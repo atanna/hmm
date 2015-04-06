@@ -31,7 +31,7 @@ def get_mixture(n, n_components=3):
     return np.random.permutation(X)
 
 
-def sample_(size, n=2, h_states=None, type_emission="Poisson"):
+def sample_(size, n=2, h_states=None, type_emission="Poisson", **e_params):
     if h_states is None:
         model_ = HMMModel.get_random_model(n, n)
         data, h_states = model_.sample(size)
@@ -44,12 +44,15 @@ def sample_(size, n=2, h_states=None, type_emission="Poisson"):
         emission = GaussianEmission(n_states=n)
         data = np.zeros((size, 2))
 
-    emission.set_rand_params()
+    if len(e_params) > 0:
+        emission._set_params(**e_params)
+    else:
+        emission.set_rand_params()
 
     for i, state in enumerate(h_states):
         data[i] = emission.sample(state)
 
-    return data
+    return data, emission
 
 
 def test_sklearn(data, n=2, n_iter=5):
@@ -114,9 +117,12 @@ def test_hmm(type_e="Poisson", T=int(2e3), start="k-means"):
 
         print(type_e)
         print(T)
+
+
         print(name)
         fig.savefig(name)
         plt.show()
+
 
 
     n, m = 2, 2
@@ -203,22 +209,26 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
         for i, ax in enumerate(fig.axes):
                 for tl in ax.get_xticklabels() + ax.get_yticklabels():
                     tl.set_visible(False)
-        fig.text(0.20, 0.095, text)
+        fig.text(0.11, 0.095, text)
         return fig
 
 
 def main_test(contexts, log_a, T=int(2e3), max_len=4,
-              type_e="Poisson", start="k-means", save_data=False):
+              type_e="Poisson", start="k-means", save_data=False, **kwargs):
     def go(vlhmm):
         print(type_e)
         vlhmm.fit(data, max_len=max_len, start=start,
-                  th_prune=4e-3, type_emission=type_e)
+                  th_prune=4e-3, log_pr_thresh=0.15, type_emission=type_e)
         print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
         print("T=", T, "max_len=", max_len)
-
-        name = "graphics/tmp/{}/{}_{}".format(type_e, start, random.randrange(T))
+        comp_emission = "real emission\n{}\npredicted emission\n{} \n".format(e_params, vlhmm.emission.get_str_params())
+        print(comp_emission)
+        path = "graphics/vlhmm2/{}/".format(type_e)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        name = "{}{}{}".format(path, start, random.randrange(T))
         print(name)
-        text = "{}\nT = {}\ninit: {}\n".format(type_e, T, start)
+        text = "{}\nT = {}\ninit: {}\n\n{}\n".format(type_e, T, start, comp_emission)
         fig = create_img(vlhmm, contexts, log_a, name, text)
         fig.savefig(name+".jpg")
         if save_data:
@@ -227,7 +237,11 @@ def main_test(contexts, log_a, T=int(2e3), max_len=4,
 
     n= len(log_a)
     h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
-    data = sample_(T, n, list(map(int, h_states)), type_emission=type_e)
+    data, emission = sample_(T, n, list(map(int, h_states)), type_emission=type_e, **kwargs)
+    e_params  = emission.get_str_params()
+    print("real emission:\n{}".format(e_params))
+    emission.show()
+    plt.show()
     go(fb.VLHMMWang(n))
 
 
@@ -238,49 +252,52 @@ if __name__ == "__main__":
         [[0.8, 0.4, 0.3, 0.2, 0.9],
          [0.2, 0.6, 0.7, 0.8, 0.1]]
     ))
+
+    contexts = ["00", "01", "1"]
+    log_a = np.log(np.array(
+        [[0.7, 0.4, 0.2],
+         [0.3, 0.6, 0.8]]
+    ))
+
+    contexts = ["0", "1"]
+    log_a = np.log(np.array(
+        [[0.8, 0.4],
+         [0.2, 0.6]]
+    ))
     #
-    # contexts = ["00", "01", "1"]
-    # log_a = np.log(np.array(
-    #     [[0.7, 0.4, 0.3],
-    #      [0.3, 0.6, 0.7]]
-    # ))
+    contexts = ["0", "1", "2"]
+    log_a = np.log(np.array(
+        [[0.1, 0.3, 0.4],
+         [0.3 , 0.1, 0.5],
+         [0.6, 0.6, 0.1]]
+    ))
 
-    # contexts = ["0", "1"]
-    # log_a = np.log(np.array(
-    #     [[0.8, 0.4],
-    #      [0.2, 0.6]]
-    # ))
-    #
-    # contexts = ["0", "1", "2"]
-    # log_a = np.log(np.array(
-    #     [[0.1, 0.3, 0.4],
-    #      [0.3 , 0.1, 0.5],
-    #      [0.6, 0.6, 0.1]]
-    # ))
-    #
-    # contexts = [""]
-    # log_a = np.log(np.array(
-    #     [[0.1],
-    #      [0.3],
-    #      [0.6]]
-    # ))
-    #
-    # contexts = [""]
-    # log_a = np.log(np.array(
-    #     [[0.4],
-    #      [0.6]]
-    # ))
+    contexts = [""]
+    log_a = np.log(np.array(
+        [[0.1],
+         [0.3],
+         [0.6]]
+    ))
 
-    # main_test(contexts, log_a, max_len=3, start="rand", type_e="Gauss", T=int(1e3))
+    contexts = [""]
+    log_a = np.log(np.array(
+        [[0.4],
+         [0.6]]
+    ))
+    contexts = ["00", "01", "1"]
+    log_a = np.log(np.array(
+        [[0.7, 0.4, 0.3],
+         [0.3, 0.6, 0.7]]
+    ))
+    contexts = ["00", "01", "02", "1", "2"]
+    log_a = np.log(np.array(
+        [[0.1, 0.2, 0.3, 0.9, 0.6],
+        [0.4, 0.7, 0.1, 0.02, 0.35],
+        [0.5, 0.1, 0.6, 0.08, 0.05]]
+    ))
 
 
-    # log_a = np.random.random((2, len(contexts)))
-    # log_a = np.log(log_a/log_a.sum(axis=0))
-    # print(np.exp(log_a))
-
-    # main_test(contexts, log_a, max_len=4, start="rand", type_e="Gauss", T=int(4e3))
-    # main_test(contexts, log_a,  max_len=2, start="equal", type_e="Poisson", T=int(1e3))
-
+    main_test(contexts, log_a, max_len=2, start="rand", type_e="Poisson", T=int(4e3), alpha=np.array([0.2, 17, 8]))
 
 
 
@@ -326,14 +343,91 @@ def test_wang_with_data_from_file(f_name, type_e="Poisson", max_len=3, start="k-
     vlhmm = fb.VLHMMWang(n)
     print(start)
     vlhmm.fit(data, max_len=max_len, start=start,
-              th_prune=0.1, type_emission=type_e)
+              th_prune=0.01, log_pr_thresh=0.1, type_emission=type_e)
     print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
     print("T=", len(data), "max_len=", max_len)
 
-    name = "graphics/real/{}{}".format(start, random.randrange(100))
+    path = "graphics/real/"
+    if not os.path.exists(path):
+        os.makedirs(path)
+    name = "{}{}_{}_{}".format(path, start, np.round(vlhmm.emission.alpha,1), random.randrange(100))
     print(name)
     create_img(vlhmm, name=name)
 
 
-test_wang_with_data_from_file("resources/chr21_10000.txt", max_len=3, start="k-means", type_e="Poisson")
+# test_wang_with_data_from_file("resources/chr21_10000.txt", max_len=4, start="k-means", type_e="Poisson")
 
+
+def fit_parts(data, chr_i, bin_size, n=2, max_len=3, start="k-means"):
+    def fit_part(Y_):
+        Y = np.array(Y_)
+        if len(Y) > thr_len_data:
+            print("T = {}".format(len(Y)))
+            print(Y)
+            vlhmm = fb.VLHMMWang(n)
+            vlhmm.fit(np.array(Y), max_len=max_len, start=start)
+            name = "{}{}_{}_{}_{}".format(path, start, len(Y), np.round(vlhmm.emission.alpha[vlhmm.emission.get_order()], 1), ind)
+            print(name)
+            create_img(vlhmm, name=name)
+            return True
+        return False
+
+    max_null = int(bin_size/2)
+    path = "graphics/real/chr{}/{}/{}/{}/".format(chr_i, bin_size,  max_null, random.randrange(1000))
+    print(path)
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    thr_len_data = 8*n**max_len
+    Y = []
+    ind = 0
+    num_null = 0
+    for i, x in enumerate(data):
+            if x == 0:
+                num_null += 1
+                if num_null > max_null and len(Y) > 0:
+                    ind += fit_part(Y[:-num_null])
+                    Y=[]
+                    num_null = 0
+                continue
+            Y.append(x)
+
+
+
+
+# chr_i = 1
+# bin_size = 400
+# data = np.genfromtxt("resources/chr{}_{}.txt".format(chr_i, bin_size))
+# fit_parts(data, chr_i=chr_i, bin_size=bin_size, max_len=3, start="k-means")
+
+
+
+
+
+def show_data():
+    data = np.genfromtxt("resources/chr21_2000.txt")
+    thr_len_data = 10*2*4
+    list_data = []
+    Y = []
+    f = plt.figure()
+    for i, x in enumerate(data):
+            if x == 0:
+                if len(Y) > thr_len_data:
+                    list_data.append(Y)
+                    Y=[]
+
+                continue
+            Y.append(x)
+
+    N = len(list_data)
+    print(N)
+    num = 5
+    bins=25
+    for i in range(0, N, num):
+        for j in range(i, i+num):
+            plt.hist(list_data[j], bins, label="{}".format(j), normed=True)
+        plt.legend()
+        plt.show()
+    ind=0
+    print(ind)
+# show_data()

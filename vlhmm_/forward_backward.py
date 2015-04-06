@@ -1,3 +1,4 @@
+import functools
 import numpy as np
 import pylab as plt
 from collections import defaultdict
@@ -23,6 +24,7 @@ class AbstractForwardBackward():
         self.log_gamma = np.zeros((self.T, self.n_contexts))
         self.log_ksi = np.zeros((self.T, self.n, self.n_contexts))
         self.track_log_p = defaultdict(list)
+        self.track_e_params = {}
 
     def _init_X(self, data, start):
         pass
@@ -74,6 +76,7 @@ class AbstractForwardBackward():
         for i in range(n_iter):
             e_step()
             m_step()
+            print(self.emission.get_str_params())
             self.track_log_p[self.n_contexts].append(self._log_p)
             if np.abs(prev_log_p - self._log_p) < log_pr_thresh:
                 return
@@ -155,10 +158,14 @@ class AbstractForwardBackward():
             if i == 0:
                 ax.set_ylabel('log_p')
             num = len(self.track_log_p[n_context])
-            ax.set_xlabel("{} iterations".format(num))
+            if (self.emission.name == "Poisson"):
+                ax.set_xlabel("{} iterations\n{}".format(num, self.track_e_params[n_context]))
+            else:
+                ax.set_xlabel("{} iterations".format(num))
             ax.plot(range(num), self.track_log_p[n_context], 'bo', range(num),
                     self.track_log_p[n_context], 'k')
             ax.set_ylim(min_y, max_y)
+            # ax.text(0, min_y, self.track_e_params[n_context])
         return fig
 
 
@@ -198,6 +205,10 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
             self._em(n_iter, log_pr_thresh)
             self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
         return self
+
+    def _em(self, *args, **kwargs):
+        super()._em(*args, **kwargs)
+        self.track_e_params[self.n_contexts] = self.emission.get_str_params()
 
     @staticmethod
     def get_sorted_contexts_and_log_a(contexts, log_a, order):
@@ -243,17 +254,28 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         return prune
 
     def update_contexts(self):
-        self.contexts = list(self.tr_trie.seq_contexts)
-        self.n_contexts = len(self.contexts)
-        self.id_c = dict(zip(self.contexts, range(self.n_contexts)))
+
+        contexts = list(self.tr_trie.seq_contexts)
+        n_contexts = len(contexts)
+        log_context_p = np.log(np.zeros(n_contexts))
+        id_c = dict(zip(contexts, range(n_contexts)))
+        for old_i, old_c in enumerate(self.contexts):
+                c =  self.tr_trie.get_c(old_c)
+                i = id_c[c]
+                log_context_p[i] = np.logaddexp(log_context_p[i],
+                                          self.log_context_p[old_i])
+        print("old_p: {}\n new_p: {}".format(np.exp(self.log_context_p), np.exp(log_context_p)))
+        self.log_context_p = log_context_p
+        self.contexts = contexts
+        self.n_contexts = n_contexts
+        self.id_c = id_c
         self.log_a = self.tr_trie.count_log_a()
         if self.n_contexts > 1:
             self.state_c = list(map(lambda c: int(c[0]), self.contexts))
-        self.log_alpha = np.zeros((self.T, self.n_contexts))
-        self.log_beta = np.zeros((self.T, self.n_contexts))
-        self.log_gamma = np.zeros((self.T, self.n_contexts))
-        self.log_ksi = np.zeros((self.T, self.n, self.n_contexts))
-        self.log_context_p = np.log(np.ones(self.n_contexts) / self.n_contexts)
+        self.log_alpha = np.log(np.zeros((self.T, self.n_contexts)))
+        self.log_beta = np.log(np.zeros((self.T, self.n_contexts)))
+        self.log_gamma = np.log(np.zeros((self.T, self.n_contexts)))
+        self.log_ksi = np.log(np.zeros((self.T, self.n, self.n_contexts)))
 
     def _update_first_alpha(self, i):
         self.log_alpha[0][i] = \
@@ -267,8 +289,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
             for c_ in self.tr_trie.get_list_c(c[1:]+str(q)):
                 i_ = self.id_c[c_]
                 if len(c_) > t:
-                    c_ = c_[:t]
-                    log_transition = self.tr_trie.log_tr_p(c[0], c_)
+                    log_transition = self.tr_trie.log_tr_p(c[0], c_[:t+1])
                 else:
                     log_transition = self.log_a[int(c[0]), i_]
 
@@ -294,6 +315,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         super()._log_gamma()
         self.log_context_p = logsumexp(self.log_gamma, axis=0)
         self.log_context_p -= logsumexp(self.log_context_p)
+        print("c_p = {}".format(np.exp(self.log_context_p)))
 
     def _update_ksi(self, t, q, i):
 
@@ -303,6 +325,9 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
                                 self.log_beta[t+1, q]
 
     def update_tr_params(self):
+        # print("alpha: \n", np.exp(self.log_alpha))
+        # print("beta \n", np.exp(self.log_beta))
+        # print("gamma \n", np.exp(self.log_gamma))
         super().update_tr_params()
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
 
