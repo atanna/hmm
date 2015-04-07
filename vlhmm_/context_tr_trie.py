@@ -25,9 +25,8 @@ class ContextTransitionTrie():
         self.alphabet = "".join(list(map(str, range(self.n))))
         self.seq_contexts = list(gen_all_contexts(self.alphabet, self._max_len))
         self.n_contexts = len(self.seq_contexts)
-        self.contexts = datrie.Trie(self.alphabet)
-        for c in self.seq_contexts:
-            self.contexts[c] = 1
+        log_a = np.log(np.ones((self.n,self.n_contexts))/self.n)
+        self.recount_with_log_a(log_a, self.seq_contexts)
 
     def _init_tr_trie(self, *args, **kwargs):
         def freq(w):
@@ -57,7 +56,7 @@ class ContextTransitionTrie():
 
         self.recount_tr_trie()
 
-    def _build_trie(self, data, max_len=3, min_num=2):
+    def _build_trie(self, data, max_len=3, min_num=2, n=3):
         """
         :param data:
         :param max_len:
@@ -69,7 +68,6 @@ class ContextTransitionTrie():
         print("build trie...")
         _data = data[::-1]
         self.alphabet = sorted(list(set(_data)))
-        self.n = len(self.alphabet)
         self._end = _data[:max_len]
         trie = datrie.Trie(self.alphabet)
         self.T = len(_data)
@@ -331,4 +329,3 @@ class ContextTransitionTrie():
         if fname is not None:
             G.draw(fname, prog="dot")
         return G
-
