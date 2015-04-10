@@ -6,13 +6,18 @@ from scipy.misc import logsumexp
 
 
 class ContextTransitionTrie():
-    def __init__(self, data=None, **kwargs):
+    def __init__(self, data=None, n=2, max_len=3, **kwargs):
+        self.n = n
+        self._max_len = max_len
+        self.alphabet = "".join(list(map(str, range(self.n))))
+        self._init_seq_contexts()
+
         if data is None:
             self._init_without_data(**kwargs)
         else:
-            self._init_tr_trie(data, **kwargs)
+            self._init_tr_trie(data)
 
-    def _init_without_data(self, **kwargs):
+    def _init_seq_contexts(self):
         def gen_all_contexts(alphabet, l):
             if l == 0:
                 yield ""
@@ -20,15 +25,15 @@ class ContextTransitionTrie():
                 for q in alphabet:
                     for c in gen_all_contexts(alphabet, l-1):
                         yield q+c
-        self._max_len = kwargs.get("max_len", 3)
-        self.n = kwargs["n"]
-        self.alphabet = "".join(list(map(str, range(self.n))))
         self.seq_contexts = list(gen_all_contexts(self.alphabet, self._max_len))
         self.n_contexts = len(self.seq_contexts)
-        log_a = np.log(np.ones((self.n,self.n_contexts))/self.n)
+
+    def _init_without_data(self, **kwargs):
+        start = kwargs.get("start", "equal")
+        log_a = self.count_log_a(type=start)
         self.recount_with_log_a(log_a, self.seq_contexts)
 
-    def _init_tr_trie(self, *args, **kwargs):
+    def _init_tr_trie(self, data):
         def freq(w):
             try:
                 return trie[w]
@@ -47,16 +52,16 @@ class ContextTransitionTrie():
                 freq_c -= 1
             return np.log(freq_qc) - np.log(freq_c)
 
-        trie = self._build_trie(*args, **kwargs)
+        trie = self._build_trie(data)
 
-        self.log_c_tr_trie = datrie.Trie(self.alphabet)
-        for c in self.seq_contexts:
+        self.log_a = np.log(np.zeros((self.n, self.n_contexts)))
+        for i, c in enumerate(self.seq_contexts):
             for q in self.alphabet:
-                self.log_c_tr_trie[q + c] = log_tr_p(q, c)
+                self.log_a[int(q), i] = log_tr_p(q, c)
+        self.log_a = self.log_a - logsumexp(self.log_a, axis=0)
+        self.recount_with_log_a(self.log_a, self.seq_contexts)
 
-        self.recount_tr_trie()
-
-    def _build_trie(self, data, max_len=3, min_num=2, n=3):
+    def _build_trie(self, data):
         """
         :param data:
         :param max_len:
@@ -67,14 +72,13 @@ class ContextTransitionTrie():
         """
         print("build trie...")
         _data = data[::-1]
-        self.alphabet = sorted(list(set(_data)))
-        self._end = _data[:max_len]
+        self._end = _data[:self._max_len]
         trie = datrie.Trie(self.alphabet)
         self.T = len(_data)
-        self._max_len = max_len
+        min_num=1
         term_nodes = set()
         for i in range(self.T):
-            for l in range(1, max_len + 2):
+            for l in range(1, self._max_len + 2):
                 if i + l > self.T:
                     break
                 s = _data[i: i + l]
@@ -82,8 +86,8 @@ class ContextTransitionTrie():
                     trie[s] += 1
                 else:
                     trie[s] = 1
-                if l == max_len:
-                    term_nodes.add(_data[i: i + max_len])
+                if l == self._max_len:
+                    term_nodes.add(_data[i: i + self._max_len])
 
         for v, n_v in trie.items():
             prune = True
@@ -95,7 +99,7 @@ class ContextTransitionTrie():
                 for q in self.alphabet:
                     trie._delitem(v+q)
             else:
-                if len(v) < max_len:
+                if len(v) < self._max_len:
                     for q in self.alphabet:
                         if v+q not in trie:
                             trie[v+q] = 0
@@ -105,7 +109,7 @@ class ContextTransitionTrie():
         for t_node in term_nodes:
             key = trie.longest_prefix(t_node)
             self.contexts[key] = trie[key]
-        self._upd_c()
+        # self._upd_c()
         return trie
 
     def _upd_c(self):
@@ -202,7 +206,7 @@ class ContextTransitionTrie():
         return diff
 
     def count_log_a(self, type=""):
-        if type=="equal" :
+        if type == "equal" :
             log_a = np.ones((self.n, self.n_contexts))
         elif type == "rand" or "log_c_tr_trie" not in self.__dict__:
             log_a = np.random.random((self.n, self.n_contexts))
@@ -329,3 +333,4 @@ class ContextTransitionTrie():
         if fname is not None:
             G.draw(fname, prog="dot")
         return G
+

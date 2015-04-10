@@ -1,14 +1,15 @@
-import functools
 import numpy as np
 import pylab as plt
 from collections import defaultdict
+from functools import reduce
+from hmm_.hmm import HMMModel
 from scipy import stats
 from scipy.cluster.vq import kmeans2
 from scipy.misc import logsumexp
 from scipy.stats.mstats import mquantiles
-from hmm_.hmm import HMMModel
 from vlhmm_.context_tr_trie import ContextTransitionTrie
-from vlhmm_.vlhmm import AbstractVLHMM, GaussianEmission, PoissonEmission
+from vlhmm_.emission import GaussianEmission, PoissonEmission
+
 
 
 class AbstractForwardBackward():
@@ -55,6 +56,7 @@ class AbstractForwardBackward():
         """
         self.start = start
         if X is not None:
+            self.start = "defined"
             self.X = X
         else:
             self._init_X(data, start)
@@ -76,7 +78,7 @@ class AbstractForwardBackward():
         for i in range(n_iter):
             e_step()
             m_step()
-            print(self.emission.get_str_params())
+            print(self.emission.get_str_params(t_order="real"))
             self.track_log_p[self.n_contexts].append(self._log_p)
             if np.abs(prev_log_p - self._log_p) < log_pr_thresh:
                 return
@@ -127,8 +129,9 @@ class AbstractForwardBackward():
             for i in range(self.n_contexts):
                 for q in range(self.n):
                     self._update_ksi(t, q, i)
-        self.log_ksi -= \
+        self.log_ksi -=  \
             logsumexp(self.log_ksi, axis=(1, 2)).reshape((self.T, 1, 1))
+            # self._log_p
         # log_gamma = logsumexp(self.log_ksi[:-1], axis=1)
         # print(np.exp(logsumexp(self.log_ksi[:-1], axis=0) -\
         #  logsumexp(log_gamma, axis=0)))
@@ -136,8 +139,14 @@ class AbstractForwardBackward():
                 logsumexp(self.log_gamma, axis=0)
         log_a -= logsumexp(log_a, axis=0)
         self.log_a = log_a
-        print("a:\n{}".format(np.exp(self.log_a)))
+        print("a:\n{}".format(np.round(np.exp(self.log_a),4)))
         print("log_p {}".format(self._log_p))
+        if len(self.track_log_p[self.n_contexts]) > 0:
+            diff = self._log_p - self.track_log_p[self.n_contexts][-1]
+            print("diff", diff)
+            if diff < 0:
+                print("-"*100)
+            assert diff + 1 > 0
 
     def plot_log_p(self):
         fig = plt.figure()
@@ -169,16 +178,40 @@ class AbstractForwardBackward():
         return fig
 
 
+class AbstractVLHMM():
+    def __init__(self, n):
+        """
+        :param n: - length of context's alphabet, n <= 10
+        :return:
+        """
+        self.n = n
+
+    def _init_X(self, data, start):
+        if start == "k-means":
+            try:
+                centre, labels = kmeans2(data, self.n)
+            except TypeError:
+                labels= np.random.choice(range(self.n), len(data))
+        else:
+            labels= np.random.choice(range(self.n), len(data))
+        self.X = "".join(list(map(str, labels)))
+
+    def get_c(self, *args):
+        return self.tr_trie.get_c(
+            reduce(lambda res, x: res + str(x), args, ""))
+
+
 class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _init(self, data):
-        if self.start != "k-means":
+        if self.start == "defined" or self.start == "k-means":
+            print("X", self.X)
+            self.tr_trie = ContextTransitionTrie(self.X, max_len=self.max_len, n=self.n, start=self.start)
+        else:
             self.tr_trie = \
                 ContextTransitionTrie(None, max_len=self.max_len, n=self.n)
-        else:
-            self.tr_trie = ContextTransitionTrie(self.X, max_len=self.max_len)
-
+        print("_init..")
         self.contexts = self.tr_trie.seq_contexts
-        self.state_c = list(map(lambda c: int(c[0]), self.contexts))
+        self.state_c = np.array(list(map(lambda c: int(c[0]), self.contexts))).astype(np.int)
         self.n_contexts = self.tr_trie.n_contexts
         self.id_c = dict(zip(self.contexts, range(self.n_contexts)))
         self.log_context_p = np.log(np.ones(self.n_contexts) / self.n_contexts)
@@ -187,12 +220,14 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
         print("n_contexts:", self.n_contexts)
         print("contexts: {}".format(self.contexts))
-        print("a: \n{}".format(np.exp(self.log_a)))
+        print("a: \n{}".format(np.round(np.exp(self.log_a),2)))
 
     def _get_n_contexts(self):
         return self.n_contexts
 
     def _init_a(self):
+        print(self.tr_trie.contexts.items())
+        print(self.tr_trie.log_c_tr_trie.items())
         self.log_a = self.tr_trie.count_log_a(self.start)
         print(len(self.log_a))
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
@@ -264,23 +299,25 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
                 i = id_c[c]
                 log_context_p[i] = np.logaddexp(log_context_p[i],
                                           self.log_context_p[old_i])
-        print("old_p: {}\n new_p: {}".format(np.exp(self.log_context_p), np.exp(log_context_p)))
+        print("old_p: {}\n new_p: {}".format(np.round(np.exp(self.log_context_p),2), np.round(np.exp(log_context_p),2)))
         self.log_context_p = log_context_p
         self.contexts = contexts
         self.n_contexts = n_contexts
         self.id_c = id_c
         self.log_a = self.tr_trie.count_log_a()
-        if self.n_contexts > 1:
-            self.state_c = list(map(lambda c: int(c[0]), self.contexts))
         self.log_alpha = np.log(np.zeros((self.T, self.n_contexts)))
         self.log_beta = np.log(np.zeros((self.T, self.n_contexts)))
         self.log_gamma = np.log(np.zeros((self.T, self.n_contexts)))
         self.log_ksi = np.log(np.zeros((self.T, self.n, self.n_contexts)))
+        if self.n_contexts > 1:
+            self.state_c = np.array(list(map(lambda c: int(c[0]), self.contexts))).astype(np.int)
+        print(self.state_c)
 
     def _update_first_alpha(self, i):
-        self.log_alpha[0][i] = \
+        t = 0
+        self.log_alpha[t][i] = \
             self.log_context_p[i] + \
-            self.emission.log_p(self.data[0], self.state_c[i])
+            self.emission.log_p(self.data[t], self.state_c[i])
 
     def _update_next_alpha(self, t, i):
         self.log_alpha[t + 1][i] = np.log(0.)
@@ -288,10 +325,9 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         for q in range(self.n):
             for c_ in self.tr_trie.get_list_c(c[1:]+str(q)):
                 i_ = self.id_c[c_]
-                if len(c_) > t:
-                    log_transition = self.tr_trie.log_tr_p(c[0], c_[:t+1])
-                else:
-                    log_transition = self.log_a[int(c[0]), i_]
+                log_transition = self.log_a[int(c[0]), i_]
+                # if len(c_) > t:
+                #     log_transition = self.tr_trie.log_tr_p(c[0], c_[:t+1])
 
                 self.log_alpha[t + 1][i] = np.logaddexp(
                     self.log_alpha[t + 1][i],
@@ -315,29 +351,30 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         super()._log_gamma()
         self.log_context_p = logsumexp(self.log_gamma, axis=0)
         self.log_context_p -= logsumexp(self.log_context_p)
-        print("c_p = {}".format(np.exp(self.log_context_p)))
+        print("c_p = {}".format(np.round(np.exp(self.log_context_p),2)))
 
     def _update_ksi(self, t, q, i):
-
+        i_ = self.id_c[self.get_c(q, self.contexts[i])]
         self.log_ksi[t][q, i] = self.log_alpha[t][i] + \
-                                self.log_a[q,i] + \
+                                self.log_a[q, i] + \
                                 self.emission.log_p(self.data[t+1], q) + \
-                                self.log_beta[t+1, q]
+                                self.log_beta[t+1, i_]
 
     def update_tr_params(self):
-        # print("alpha: \n", np.exp(self.log_alpha))
-        # print("beta \n", np.exp(self.log_beta))
-        # print("gamma \n", np.exp(self.log_gamma))
+        print("alpha: \n", np.round(np.exp(self.log_alpha[:5]),2))
+        print("beta \n", np.round(np.exp(self.log_beta[:5]),2))
+        print("gamma \n", np.round(np.exp(self.log_gamma[:]),3))
+        print("p_state ", np.round(np.exp(logsumexp(self.log_gamma, axis=0)), 4))
         super().update_tr_params()
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
 
     def update_emission_params(self):
-        gamma = np.zeros((self.T, self.n))
-        for i in range(self.n_contexts):
-            q = self.state_c[i]
-            gamma[:, q] += np.exp(self.log_gamma[:, i])
-        gamma /= np.sum(gamma, axis=1)[:, np.newaxis]
-        self.emission.update_params(gamma, log_=False)
+        log_gamma_ = np.zeros((self.T, self.n))
+        for q in range(self.n):
+            log_gamma_[:, q] = logsumexp(self.log_gamma[:,self.state_c==q], axis=1)
+        log_gamma_ -= logsumexp(log_gamma_, axis=1)[:, np.newaxis]
+        print("log_gamma for emission .T\n", np.round(log_gamma_.T, 2))
+        self.emission.update_params(log_gamma_)
 
 
 class HMM(AbstractForwardBackward):
@@ -449,5 +486,7 @@ class DiscreteHMM(AbstractForwardBackward):
         self.model.log_a = log_a
         self.model.log_pi = self.log_gamma[0]
         # print("gamma", np.exp(self.log_gamma))
-        print("a:\n{}".format(np.exp(self.model.log_a)))
-        print("log_p {}".format(self._log_p))
+        print("a:\n{}".format(np.round(np.exp(self.model.log_a),2)))
+        print("log_p {:.3}".format(self._log_p))
+
+
