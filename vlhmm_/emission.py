@@ -161,7 +161,7 @@ class PoissonEmission(Emission):
         for state in range(self.n_states):
             self.alpha[state] = get_new_params(state)
 
-    def set_rand_params(self, _var=10.):
+    def set_rand_params(self, _var=15.):
         self.alpha = np.abs(np.random.random(self.n_states)) * _var
         self.alpha = np.sort(self.alpha)
 

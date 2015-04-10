@@ -165,11 +165,12 @@ class ContextTransitionTrie():
         try:
             return self.contexts.longest_prefix(s)
         except KeyError:
+            assert False, "{} - {}".format(s, self.contexts.items(s))
             candidates = self.contexts.items(s)
             if len(candidates) == 0:
                 return self.get_c(s[:-1])
             return sorted(candidates, key=lambda x: -x[1])[0][0]
-            # first least context with the same prefix
+            # # first least context with the same prefix
 
     def get_list_c(self, s):
         try:
@@ -237,6 +238,8 @@ class ContextTransitionTrie():
     def sample(self, size):
         X = []
         states = range(self.n)
+        max_len = self._max_len
+        long_context = ""
         context = ""
         for i in range(size):
             p = [self.log_tr_p(i, context) for i in self.alphabet]
@@ -245,7 +248,12 @@ class ContextTransitionTrie():
                                   values=(states,
                                           np.exp(p))).rvs()
             X.append(q)
-            context = self.get_c(str(q)+context)
+            long_context = (str(q) + long_context)[:max_len]
+            cs = self.get_list_c(long_context)
+            if len(cs) == 0:
+                context = ""
+            else:
+                context = self.get_list_c(long_context)[0]
 
         return "".join(map(str, X))
 

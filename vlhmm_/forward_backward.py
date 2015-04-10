@@ -196,8 +196,8 @@ class AbstractVLHMM():
             labels= np.random.choice(range(self.n), len(data))
         self.X = "".join(list(map(str, labels)))
 
-    def get_c(self, *args):
-        return self.tr_trie.get_c(
+    def get_list_c(self, *args):
+        return self.tr_trie.get_list_c(
             reduce(lambda res, x: res + str(x), args, ""))
 
 
@@ -273,7 +273,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
                                           np.exp(
                                               self.log_a[:, index_c]))).rvs()
             X[i] = self.emission.sample(q)
-            c = self.get_c(q, c)
+            c = self.tr_trie.get_c(str(q)+c)
             index_c = self.id_c[c]
         return X
 
@@ -294,24 +294,34 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         n_contexts = len(contexts)
         log_context_p = np.log(np.zeros(n_contexts))
         id_c = dict(zip(contexts, range(n_contexts)))
-        for old_i, old_c in enumerate(self.contexts):
+        if n_contexts == 1:
+            self.log_context_p = logsumexp(self.log_context_p)
+        else:
+            for old_i, old_c in enumerate(self.contexts):
+                assert len(self.tr_trie.get_list_c(old_c)) == 1, "old_c = {}, {}".format(old_c, self.tr_trie.get_list_c(old_c))
                 c =  self.tr_trie.get_c(old_c)
                 i = id_c[c]
                 log_context_p[i] = np.logaddexp(log_context_p[i],
-                                          self.log_context_p[old_i])
+                                         self.log_context_p[old_i])
         print("old_p: {}\n new_p: {}".format(np.round(np.exp(self.log_context_p),2), np.round(np.exp(log_context_p),2)))
         self.log_context_p = log_context_p
         self.contexts = contexts
         self.n_contexts = n_contexts
         self.id_c = id_c
         self.log_a = self.tr_trie.count_log_a()
+        if n_contexts == 1:
+            return
+        print("a\n{}".format(np.round(np.exp(self.log_a), 2)))
         self.log_alpha = np.log(np.zeros((self.T, self.n_contexts)))
         self.log_beta = np.log(np.zeros((self.T, self.n_contexts)))
         self.log_gamma = np.log(np.zeros((self.T, self.n_contexts)))
         self.log_ksi = np.log(np.zeros((self.T, self.n, self.n_contexts)))
-        if self.n_contexts > 1:
-            self.state_c = np.array(list(map(lambda c: int(c[0]), self.contexts))).astype(np.int)
+        self.state_c = np.array(list(map(lambda c: int(c[0]), self.contexts))).astype(np.int)
         print(self.state_c)
+        assert [int(self.contexts[i][0]) for i in range(self.n_contexts)] \
+               == [self.state_c[i] for i in range(self.n_contexts)], "{}\n{}".format(
+            [int(self.contexts[i][0]) for i in range(self.n_contexts)],
+            [self.state_c[i] for i in range(self.n_contexts)])
 
     def _update_first_alpha(self, i):
         t = 0
@@ -322,30 +332,29 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _update_next_alpha(self, t, i):
         self.log_alpha[t + 1][i] = np.log(0.)
         c = self.contexts[i]
-        for q in range(self.n):
-            for c_ in self.tr_trie.get_list_c(c[1:]+str(q)):
-                i_ = self.id_c[c_]
-                log_transition = self.log_a[int(c[0]), i_]
-                # if len(c_) > t:
-                #     log_transition = self.tr_trie.log_tr_p(c[0], c_[:t+1])
+        for c_ in self.tr_trie.get_list_c(c[1:]):
+            i_ = self.id_c[c_]
+            log_transition = self.log_a[self.state_c[i], i_]
+            # if len(c_) > t:
+            #     log_transition = self.tr_trie.log_tr_p(c[0], c_[:t+1])
 
-                self.log_alpha[t + 1][i] = np.logaddexp(
-                    self.log_alpha[t + 1][i],
-                    self.log_alpha[t][i_]
-                    + log_transition
-                    + self.emission.log_p(self.data[t + 1], self.state_c[i]))
+            self.log_alpha[t + 1][i] = np.logaddexp(
+                self.log_alpha[t + 1][i],
+                self.log_alpha[t][i_]
+                + log_transition
+                + self.emission.log_p(self.data[t + 1], self.state_c[i]))
     
     def _update_beta(self, t, i):
         self.log_beta[t][i] = np.log(0.)
         c = self.contexts[i]
         for q in range(self.n):
-            c_ = self.get_c(q, c)
-            i_ = self.id_c[c_]
-            self.log_beta[t][i] = np.logaddexp(
-                self.log_beta[t][i],
-                self.log_a[q, i]
-                + self.emission.log_p(self.data[t + 1], self.state_c[i_])
-                + self.log_beta[t + 1][i_])
+            for c_ in self.tr_trie.get_list_c(str(q) + c):                                        #very strange....
+                i_ = self.id_c[c_]
+                self.log_beta[t][i] = np.logaddexp(
+                    self.log_beta[t][i],
+                    self.log_a[q, i]
+                    + self.emission.log_p(self.data[t + 1], q)
+                    + self.log_beta[t + 1][i_])
 
     def _log_gamma(self):
         super()._log_gamma()
@@ -354,11 +363,12 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         print("c_p = {}".format(np.round(np.exp(self.log_context_p),2)))
 
     def _update_ksi(self, t, q, i):
-        i_ = self.id_c[self.get_c(q, self.contexts[i])]
-        self.log_ksi[t][q, i] = self.log_alpha[t][i] + \
-                                self.log_a[q, i] + \
-                                self.emission.log_p(self.data[t+1], q) + \
-                                self.log_beta[t+1, i_]
+        for c_ in self.get_list_c(q, self.contexts[i]):
+            i_ = self.id_c[c_]
+            self.log_ksi[t][q, i] = self.log_alpha[t][i] + \
+                                    self.log_a[q, i] + \
+                                    self.emission.log_p(self.data[t+1], q) + \
+                                    self.log_beta[t+1, i_]
 
     def update_tr_params(self):
         print("alpha: \n", np.round(np.exp(self.log_alpha[:5]),2))
