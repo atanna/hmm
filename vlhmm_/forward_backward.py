@@ -268,10 +268,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         index_c = self.id_c[c]
         states = np.arange(self.n)
         for i in range(size):
-            q = stats.rv_discrete(name='custm',
-                                  values=(states,
-                                          np.exp(
-                                              self.log_a[:, index_c]))).rvs()
+            q = int(np.random.choice(states, p=np.exp(self.log_a[:, index_c])))
             X[i] = self.emission.sample(q)
             c = self.tr_trie.get_c(str(q)+c)
             index_c = self.id_c[c]

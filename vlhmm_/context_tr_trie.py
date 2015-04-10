@@ -1,7 +1,6 @@
 import datrie
 import numpy as np
 from pygraphviz import AGraph
-from scipy import stats
 from scipy.misc import logsumexp
 
 
@@ -244,9 +243,7 @@ class ContextTransitionTrie():
         for i in range(size):
             p = [self.log_tr_p(i, context) for i in self.alphabet]
             # print(context, np.exp(p))
-            q = stats.rv_discrete(name='custm',
-                                  values=(states,
-                                          np.exp(p))).rvs()
+            q = str(np.random.choice(states, p=np.exp(p)))
             X.append(q)
             long_context = (str(q) + long_context)[:max_len]
             cs = self.get_list_c(long_context)
