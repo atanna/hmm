@@ -3,13 +3,11 @@ import pylab as plt
 from collections import defaultdict
 from functools import reduce
 from hmm_.hmm import HMMModel
-from scipy import stats
 from scipy.cluster.vq import kmeans2
 from scipy.misc import logsumexp
 from scipy.stats.mstats import mquantiles
 from vlhmm_.context_tr_trie import ContextTransitionTrie
 from vlhmm_.emission import GaussianEmission, PoissonEmission
-
 
 
 class AbstractForwardBackward():
@@ -345,7 +343,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.log_beta[t][i] = np.log(0.)
         c = self.contexts[i]
         for q in range(self.n):
-            for c_ in self.tr_trie.get_list_c(str(q) + c):                                        #very strange....
+            for c_ in self.tr_trie.get_list_c(str(q) + c):
                 i_ = self.id_c[c_]
                 self.log_beta[t][i] = np.logaddexp(
                     self.log_beta[t][i],
@@ -360,12 +358,15 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         print("c_p = {}".format(np.round(np.exp(self.log_context_p),2)))
 
     def _update_ksi(self, t, q, i):
+        self.log_ksi[t][q, i] = np.log(0.)
         for c_ in self.get_list_c(q, self.contexts[i]):
             i_ = self.id_c[c_]
-            self.log_ksi[t][q, i] = self.log_alpha[t][i] + \
-                                    self.log_a[q, i] + \
-                                    self.emission.log_p(self.data[t+1], q) + \
-                                    self.log_beta[t+1, i_]
+            self.log_ksi[t][q, i] = \
+                np.logaddexp(self.log_ksi[t][q, i],
+                             self.log_alpha[t][i] +
+                             self.log_a[q, i] +
+                             self.emission.log_p(self.data[t+1], q) +
+                             self.log_beta[t+1, i_])
 
     def update_tr_params(self):
         print("alpha: \n", np.round(np.exp(self.log_alpha[:5]),2))
