@@ -42,13 +42,14 @@ class AbstractForwardBackward():
             print("init_mu = {}..\ninit_sigma = {}..\n".format(
                 self.emission.mu, self.emission.sigma))
 
-    def fit(self, data, n_iter=150, X=None, log_pr_thresh=1e-2, start="k-means", type_emission="Poisson"):
+    def fit(self, data, n_iter=150, X=None, log_pr_thresh=1e-2,
+            start="k-means", type_emission="Poisson"):
         """
         :param data:
         :param n_iter:
         :param X: start hidden states
         :param log_pr_thresh: threshold for pruning
-        :param start: {"k-means", "equal", "rand"}
+        :param start: {"k-means", "equal", "rand", "defined"}
         :param type_emission:
         :return:
         """
@@ -63,19 +64,20 @@ class AbstractForwardBackward():
         self._em(n_iter, log_pr_thresh)
         return self
 
-    def _em(self, n_iter, log_pr_thresh):
-        def e_step():
+    def _e_step(self):
             self.log_forward()
             self.log_backward()
             self._log_gamma()
 
-        def m_step():
-            self.update_tr_params()
-            self.update_emission_params()
+    def _m_step(self):
+        self.update_tr_params()
+        self.update_emission_params()
+
+    def _em(self, n_iter, log_pr_thresh):
         prev_log_p = np.log(0)
         for i in range(n_iter):
-            e_step()
-            m_step()
+            self._e_step()
+            self._m_step()
             print(self.emission.get_str_params(t_order="real"))
             self.track_log_p[self.n_contexts].append(self._log_p)
             if np.abs(prev_log_p - self._log_p) < log_pr_thresh:
@@ -129,10 +131,6 @@ class AbstractForwardBackward():
                     self._update_ksi(t, q, i)
         self.log_ksi -=  \
             logsumexp(self.log_ksi, axis=(1, 2)).reshape((self.T, 1, 1))
-            # self._log_p
-        # log_gamma = logsumexp(self.log_ksi[:-1], axis=1)
-        # print(np.exp(logsumexp(self.log_ksi[:-1], axis=0) -\
-        #  logsumexp(log_gamma, axis=0)))
         log_a = logsumexp(self.log_ksi[:-1], axis=0) -\
                 logsumexp(self.log_gamma, axis=0)
         log_a -= logsumexp(log_a, axis=0)
@@ -165,14 +163,14 @@ class AbstractForwardBackward():
             if i == 0:
                 ax.set_ylabel('log_p')
             num = len(self.track_log_p[n_context])
-            if (self.emission.name == "Poisson"):
-                ax.set_xlabel("{} iterations\n{}".format(num, self.track_e_params[n_context]))
+            if self.emission.name == "Poisson":
+                ax.set_xlabel("{} iterations\n{}"
+                              .format(num, self.track_e_params[n_context]))
             else:
                 ax.set_xlabel("{} iterations".format(num))
             ax.plot(range(num), self.track_log_p[n_context], 'bo', range(num),
                     self.track_log_p[n_context], 'k')
             ax.set_ylim(min_y, max_y)
-            # ax.text(0, min_y, self.track_e_params[n_context])
         return fig
 
 
@@ -203,13 +201,15 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _init(self, data):
         if self.start == "defined" or self.start == "k-means":
             print("X", self.X)
-            self.tr_trie = ContextTransitionTrie(self.X, max_len=self.max_len, n=self.n, start=self.start)
+            self.tr_trie = ContextTransitionTrie(self.X, max_len=self.max_len,
+                                                 n=self.n, start=self.start)
         else:
             self.tr_trie = \
                 ContextTransitionTrie(None, max_len=self.max_len, n=self.n)
         print("_init..")
         self.contexts = self.tr_trie.seq_contexts
-        self.state_c = np.array(list(map(lambda c: int(c[0]), self.contexts))).astype(np.int)
+        self.state_c = np.array(list(
+            map(lambda c: int(c[0]), self.contexts))).astype(np.int)
         self.n_contexts = self.tr_trie.n_contexts
         self.id_c = dict(zip(self.contexts, range(self.n_contexts)))
         self.log_context_p = np.log(np.ones(self.n_contexts) / self.n_contexts)
@@ -230,7 +230,8 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         print(len(self.log_a))
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
 
-    def fit(self, data, max_len=4, n_iter=55, th_prune=1e-2, log_pr_thresh=1e-2, **kwargs):
+    def fit(self, data, max_len=4, n_iter=75, th_prune=8e-3,
+            log_pr_thresh=0.15, **kwargs):
         self.max_len = max_len
         super().fit(data, n_iter, log_pr_thresh=log_pr_thresh, **kwargs)
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
@@ -293,12 +294,16 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
             self.log_context_p = logsumexp(self.log_context_p)
         else:
             for old_i, old_c in enumerate(self.contexts):
-                assert len(self.tr_trie.get_list_c(old_c)) == 1, "old_c = {}, {}".format(old_c, self.tr_trie.get_list_c(old_c))
+                assert len(self.tr_trie.get_list_c(old_c)) == 1, \
+                    "old_c = {}, {}"\
+                        .format(old_c, self.tr_trie.get_list_c(old_c))
                 c =  self.tr_trie.get_c(old_c)
                 i = id_c[c]
                 log_context_p[i] = np.logaddexp(log_context_p[i],
                                          self.log_context_p[old_i])
-        print("old_p: {}\n new_p: {}".format(np.round(np.exp(self.log_context_p),2), np.round(np.exp(log_context_p),2)))
+        print("old_p: {}\n new_p: {}"
+              .format(np.round(np.exp(self.log_context_p),2),
+                      np.round(np.exp(log_context_p),2)))
         self.log_context_p = log_context_p
         self.contexts = contexts
         self.n_contexts = n_contexts
@@ -311,10 +316,12 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.log_beta = np.log(np.zeros((self.T, self.n_contexts)))
         self.log_gamma = np.log(np.zeros((self.T, self.n_contexts)))
         self.log_ksi = np.log(np.zeros((self.T, self.n, self.n_contexts)))
-        self.state_c = np.array(list(map(lambda c: int(c[0]), self.contexts))).astype(np.int)
+        self.state_c = np.array(list(
+            map(lambda c: int(c[0]), self.contexts))).astype(np.int)
         print(self.state_c)
         assert [int(self.contexts[i][0]) for i in range(self.n_contexts)] \
-               == [self.state_c[i] for i in range(self.n_contexts)], "{}\n{}".format(
+               == [self.state_c[i] for i in range(self.n_contexts)], \
+            "{}\n{}".format(
             [int(self.contexts[i][0]) for i in range(self.n_contexts)],
             [self.state_c[i] for i in range(self.n_contexts)])
 
@@ -330,8 +337,8 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         for c_ in self.tr_trie.get_list_c(c[1:]):
             i_ = self.id_c[c_]
             log_transition = self.log_a[self.state_c[i], i_]
-            # if len(c_) > t:
-            #     log_transition = self.tr_trie.log_tr_p(c[0], c_[:t+1])
+            if len(c_) > t:
+                log_transition = self.tr_trie.log_tr_p(c[0], c_[:t+1])
 
             self.log_alpha[t + 1][i] = np.logaddexp(
                 self.log_alpha[t + 1][i],
@@ -369,19 +376,21 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
                              self.log_beta[t+1, i_])
 
     def update_tr_params(self):
-        print("alpha: \n", np.round(np.exp(self.log_alpha[:5]),2))
-        print("beta \n", np.round(np.exp(self.log_beta[:5]),2))
-        print("gamma \n", np.round(np.exp(self.log_gamma[:]),3))
+        # print("alpha: \n", np.round(np.exp(self.log_alpha[:5]),2))
+        # print("beta \n", np.round(np.exp(self.log_beta[:5]),2))
+        # print("gamma \n", np.round(np.exp(self.log_gamma[:]),3))
         print("p_state ", np.round(np.exp(logsumexp(self.log_gamma, axis=0)), 4))
         super().update_tr_params()
-        self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
+                                        self.log_context_p)
 
     def update_emission_params(self):
         log_gamma_ = np.zeros((self.T, self.n))
         for q in range(self.n):
-            log_gamma_[:, q] = logsumexp(self.log_gamma[:,self.state_c==q], axis=1)
+            log_gamma_[:, q] = logsumexp(self.log_gamma[:,self.state_c==q],
+                                         axis=1)
         log_gamma_ -= logsumexp(log_gamma_, axis=1)[:, np.newaxis]
-        print("log_gamma for emission .T\n", np.round(log_gamma_.T, 2))
+        # print("log_gamma for emission .T\n", np.round(log_gamma_.T, 2))
         self.emission.update_params(log_gamma_)
 
 

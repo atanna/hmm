@@ -7,7 +7,7 @@ import vlhmm_.forward_backward as fb
 from sklearn.hmm import GaussianHMM
 from vlhmm_.context_tr_trie import ContextTransitionTrie
 from hmm_.hmm import HMMModel, HMM
-from vlhmm_.vlhmm import GaussianEmission, PoissonEmission
+from vlhmm_.emission import GaussianEmission, PoissonEmission
 
 
 def data_to_file(data, f_name):
@@ -213,12 +213,12 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
         return fig
 
 
-def main_test(contexts, log_a, T=int(2e3), max_len=4,
-              type_e="Poisson", start="k-means", save_data=False, **kwargs):
+def main_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3, log_pr_thresh=0.15,
+              type_e="Poisson", start="k-means", save_data=False,show_e=True, **kwargs):
     def go(vlhmm):
         print(type_e)
-        vlhmm.fit(data, max_len=max_len, start=start,
-                  th_prune=4e-3, log_pr_thresh=0.15, type_emission=type_e)
+        vlhmm.fit(data, max_len=max_len, start=start, th_prune=th_prune,
+                  log_pr_thresh=log_pr_thresh, type_emission=type_e)
         print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
         print("T=", T, "max_len=", max_len)
         comp_emission = "real emission\n{}\npredicted emission\n{} \n".format(e_params, vlhmm.emission.get_str_params())
@@ -226,7 +226,7 @@ def main_test(contexts, log_a, T=int(2e3), max_len=4,
         path = "graphics/vlhmm2/{}/".format(type_e)
         if not os.path.exists(path):
             os.makedirs(path)
-        name = "{}{}{}".format(path, start, random.randrange(T))
+        name = "{}{}{}_{}_{}_{}".format(path, start, random.randrange(T), T, th_prune, max_len)
         print(name)
         text = "{}\nT = {}\ninit: {}\n\n{}\n".format(type_e, T, start, comp_emission)
         fig = create_img(vlhmm, contexts, log_a, name, text)
@@ -240,8 +240,9 @@ def main_test(contexts, log_a, T=int(2e3), max_len=4,
     data, emission = sample_(T, n, list(map(int, h_states)), type_emission=type_e, **kwargs)
     e_params  = emission.get_str_params()
     print("real emission:\n{}".format(e_params))
-    emission.show()
-    plt.show()
+    if show_e:
+        emission.show()
+        plt.show()
     go(fb.VLHMMWang(n))
 
 
@@ -279,16 +280,7 @@ if __name__ == "__main__":
          [0.6]]
     ))
 
-    contexts = [""]
-    log_a = np.log(np.array(
-        [[0.4],
-         [0.6]]
-    ))
-    contexts = ["00", "01", "1"]
-    log_a = np.log(np.array(
-        [[0.7, 0.4, 0.3],
-         [0.3, 0.6, 0.7]]
-    ))
+
     contexts = ["00", "01", "02", "1", "2"]
     log_a = np.log(np.array(
         [[0.1, 0.2, 0.3, 0.9, 0.6],
@@ -297,7 +289,30 @@ if __name__ == "__main__":
     ))
 
 
-    main_test(contexts, log_a, max_len=2, start="rand", type_e="Poisson", T=int(4e3), alpha=np.array([0.2, 17, 8]))
+    contexts = ["000", "0010", "0011", "01", "1"]
+    log_a = np.log(np.array([
+        [0.9, 0.2, 0.4, 0.3, 0.9],
+        [0.1, 0.8, 0.6, 0.7, 0.1]
+    ]
+    ))
+    #
+    # contexts = ["00", "01", "1"]
+    # log_a = np.log(np.array([
+    #     [0., 0.5, 0.19],
+    #     [1., 0.5, 0.81]]))
+    # contexts = ["0", "1"]
+    # log_a = np.log(np.array(
+    #     [[0., 1.],
+    #      [1., 0.]]
+    # ))
+
+    # contexts = ["00", "01", "10", "110", "111"]
+    # log_a = np.log(np.array(
+    #     [[0.8, 0.4, 0.3, 0.2, 0.9],
+    #      [0.2, 0.6, 0.7, 0.8, 0.1]]
+    # ))
+    main_test(contexts, log_a, max_len=5, start="k-means", type_e="Poisson", T=int(1e4), th_prune=8e-3, show_e=True)
+
 
 
 
@@ -325,109 +340,22 @@ def get_data(fname="resources/ENCFF000AWF.bam", chr_i=20, bin_size=10000):
         return x
 
 
-def test_wang_with_data_from_file(f_name, type_e="Poisson", max_len=3, start="k-means"):
+def test_wang_with_data_from_file(f_name, type_e="Poisson", X=None, n=3, max_len=3, th_prune=0.01, log_pr_thresh=0.05, start="k-means", path = "graphics/real/"):
     data = data_from_file(f_name)
     print(len(data))
-    T = len(data)
-    X = []
-    thr = 60
-    for y in data:
-        if y == 0:
-            X.append('0')
-        elif y < thr:
-            X.append('1')
-        else:
-            X.append('2')
-    X = "".join(X)
-    n=3
     vlhmm = fb.VLHMMWang(n)
     print(start)
-    vlhmm.fit(data, max_len=max_len, start=start,
-              th_prune=0.01, log_pr_thresh=0.1, type_emission=type_e)
+    vlhmm.fit(data, X=X,  max_len=max_len, start=start,
+              th_prune=th_prune, log_pr_thresh=log_pr_thresh, type_emission=type_e)
     print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
     print("T=", len(data), "max_len=", max_len)
 
-    path = "graphics/real/"
+
     if not os.path.exists(path):
         os.makedirs(path)
-    name = "{}{}_{}_{}".format(path, start, np.round(vlhmm.emission.alpha,1), random.randrange(100))
+    name = "{}{}_{}_{}".format(path, start, vlhmm.emission.get_str_params(), random.randrange(100))
     print(name)
     create_img(vlhmm, name=name)
 
 
-# test_wang_with_data_from_file("resources/chr21_10000.txt", max_len=4, start="k-means", type_e="Poisson")
-
-
-def fit_parts(data, chr_i, bin_size, n=2, max_len=3, start="k-means"):
-    def fit_part(Y_):
-        Y = np.array(Y_)
-        if len(Y) > thr_len_data:
-            print("T = {}".format(len(Y)))
-            print(Y)
-            vlhmm = fb.VLHMMWang(n)
-            vlhmm.fit(np.array(Y), max_len=max_len, start=start)
-            name = "{}{}_{}_{}_{}".format(path, start, len(Y), np.round(vlhmm.emission.alpha[vlhmm.emission.get_order()], 1), ind)
-            print(name)
-            create_img(vlhmm, name=name)
-            return True
-        return False
-
-    max_null = int(bin_size/2)
-    path = "graphics/real/chr{}/{}/{}/{}/".format(chr_i, bin_size,  max_null, random.randrange(1000))
-    print(path)
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-    thr_len_data = 8*n**max_len
-    Y = []
-    ind = 0
-    num_null = 0
-    for i, x in enumerate(data):
-            if x == 0:
-                num_null += 1
-                if num_null > max_null and len(Y) > 0:
-                    ind += fit_part(Y[:-num_null])
-                    Y=[]
-                    num_null = 0
-                continue
-            Y.append(x)
-
-
-
-
-# chr_i = 1
-# bin_size = 400
-# data = np.genfromtxt("resources/chr{}_{}.txt".format(chr_i, bin_size))
-# fit_parts(data, chr_i=chr_i, bin_size=bin_size, max_len=3, start="k-means")
-
-
-
-
-
-def show_data():
-    data = np.genfromtxt("resources/chr21_2000.txt")
-    thr_len_data = 10*2*4
-    list_data = []
-    Y = []
-    f = plt.figure()
-    for i, x in enumerate(data):
-            if x == 0:
-                if len(Y) > thr_len_data:
-                    list_data.append(Y)
-                    Y=[]
-
-                continue
-            Y.append(x)
-
-    N = len(list_data)
-    print(N)
-    num = 5
-    bins=25
-    for i in range(0, N, num):
-        for j in range(i, i+num):
-            plt.hist(list_data[j], bins, label="{}".format(j), normed=True)
-        plt.legend()
-        plt.show()
-    ind=0
-    print(ind)
-# show_data()
+# test_wang_with_data_from_file("resources/check_test.txt", n=2, max_len=3, start="k-means", path="graphics/test/check/")

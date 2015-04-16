@@ -163,6 +163,7 @@ class PoissonEmission(Emission):
 
     def set_rand_params(self, _var=15.):
         self.alpha = np.abs(np.random.random(self.n_states)) * _var
+        self.alpha[1:] += 2*self.alpha[:-1]
         self.alpha = np.sort(self.alpha)
 
     def get_str_params(self, t_order='sorted'):
