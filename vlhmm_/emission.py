@@ -54,7 +54,6 @@ class GaussianEmission(Emission):
         self.n = data.shape[1]
         self.mu = np.zeros((self.n_states, self.n))
         self.sigma = np.zeros((self.n_states, self.n, self.n))
-        self.T = len(data)
         for state in range(self.n_states):
             y = data[self.labels == state]
             self.mu[state] = y.mean(axis=0)
@@ -68,7 +67,7 @@ class GaussianEmission(Emission):
             denom = gamma[:, state].sum()
             mu /= denom
             sigma = np.zeros((self.n, self.n))
-            for t in range(self.T):
+            for t in range(T):
                 tmp = (self.data[t] - mu)[:, np.newaxis]
                 sigma += gamma[t, state] \
                          * tmp.dot(tmp.T)
@@ -78,6 +77,7 @@ class GaussianEmission(Emission):
             gamma = np.exp(log_gamma)
         else:
             gamma = log_gamma
+        T = len(gamma)
         for state in range(self.n_states):
             self.mu[state], self.sigma[state] = get_new_params(state)
 
@@ -93,7 +93,7 @@ class GaussianEmission(Emission):
         self.sigma = np.array(sigma)
 
     def get_str_params(self, t_order="sorted"):
-        rder = list(range(self.n_states))
+        order = list(range(self.n_states))
         if t_order == "sorted":
             order = self.get_order()
         return "mu:\n{}\nsigma:\n{}".format(np.round(self.mu[order],1), np.round(self.sigma[order],1))
@@ -143,7 +143,6 @@ class PoissonEmission(Emission):
 
     def _init_params(self, data):
         self.alpha = np.zeros(self.n_states)
-        self.T = len(data)
         for state in range(self.n_states):
             y = data[self.labels == state]
             self.alpha[state] = y.mean()
