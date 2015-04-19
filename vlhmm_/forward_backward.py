@@ -45,8 +45,9 @@ class AbstractForwardBackward():
             print("init_mu = {}..\ninit_sigma = {}..\n".format(
                 self.emission.mu, self.emission.sigma))
 
-    def _prepare_to_fitting(self, data, X=None, start="k-means", type_emission="Poisson", **kwargs):
+    def _prepare_to_fitting(self, data, X=None, start="k-means", type_emission="Poisson", max_log_p_diff=1.5, **kwargs):
         self.start = start
+        self.max_log_p_diff = max_log_p_diff
         if X is not None:
             self.start = "defined"
             self.X = X
@@ -85,6 +86,7 @@ class AbstractForwardBackward():
             self._e_step()
             self._m_step()
             print(self.emission.get_str_params(t_order="real"))
+            print("_" * 75)
             if np.abs(prev_log_p - self._log_p) < log_pr_thresh:
                 return
             prev_log_p = self._log_p
@@ -143,13 +145,20 @@ class AbstractForwardBackward():
         log_a -= logsumexp(log_a, axis=0)
         self.log_a = log_a
         print("a:\n{}".format(np.round(np.exp(self.log_a),4)))
-        print("log_p {}".format(self._log_p))
+        self._check_diff_log_p()
+
+    def _check_diff_log_p(self, max_log_p_diff=None):
+        if max_log_p_diff is None:
+            max_log_p_diff = self.max_log_p_diff
+        print("log_p {:.6}    ".format(self._log_p), end="")
         if len(self.track_log_p[self.n_contexts]) > 1:
             diff = self._log_p - self.track_log_p[self.n_contexts][-2]
-            print("diff", diff)
+            print("diff {:.4}".format(diff))
             if diff < 0:
-                print("-"*100)
-            assert diff + 1 > 0
+                print("- " * 50)
+            assert diff + max_log_p_diff > 0
+        else:
+            print()
 
     def plot_log_p(self):
         fig = plt.figure()
@@ -409,7 +418,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _get_log_gamma_emission(self):
         log_gamma_ = np.zeros((self.T, self.n))
         for q in range(self.n):
-            log_gamma_[:, q] = logsumexp(self.log_gamma[:,self.state_c==q],
+            log_gamma_[:, q] = logsumexp(self.log_gamma[:, self.state_c==q],
                                          axis=1)
         log_gamma_ -= logsumexp(log_gamma_, axis=1)[:, np.newaxis]
         return log_gamma_
