@@ -9,7 +9,7 @@ class OneOfManyVLHMM(VLHMMWang):
         self.parent = parent
         self.ind = ind
         self._init(data)
-        print("T = {}".format(self.T))
+        print("{}: T = {}".format(self.ind, self.T))
 
     def _init(self, data):
         self.n = self.parent.n
@@ -23,11 +23,6 @@ class OneOfManyVLHMM(VLHMMWang):
         self.tr_trie =self.parent.tr_trie
         self.max_log_p_diff = self.parent.max_log_p_diff
         self.update_contexts()
-
-    def _e_step(self):
-        super()._e_step()
-        print("{}: ".format(self.ind), end="")
-        self._check_diff_log_p()
 
     def count_ksi(self):
         self.log_ksi[:] = np.log(0.)
@@ -55,12 +50,9 @@ class MultiVLHMM(VLHMMWang):
         kwargs = _kwargs.copy()
         self.T = sum(len(data) for data in arr_data)
         X = kwargs.pop("X", None)
-        self.X = np.hstack(X) if X is not None else None
+        self.X = np.concatenate(X) if X is not None else None
 
-        if arr_data[0].ndim > 1:
-            self.data = np.vstack(arr_data)
-        else:
-            self.data = np.hstack(arr_data)
+        self.data = np.concatenate(arr_data)
 
         super()._prepare_to_fitting(self.data, X=self.X, **(kwargs))
 
@@ -70,13 +62,13 @@ class MultiVLHMM(VLHMMWang):
             self.vlhmms.append(OneOfManyVLHMM(self, data, i))
 
     def _e_step(self):
-        self._log_p = np.log(0.)
+        self._log_p = np.log(1.)
         t = 0
         for vlhmm in self.vlhmms:
             T = vlhmm.T
             vlhmm._e_step()
             self.log_gamma[t: t+T] = vlhmm.log_gamma
-            self._log_p = np.logaddexp(self._log_p, vlhmm._log_p)
+            self._log_p = self._log_p + vlhmm._log_p
             t += T
         self.track_log_p[self.n_contexts].append(self._log_p)
 
@@ -101,12 +93,18 @@ class MultiVLHMM(VLHMMWang):
                                         self.log_context_p)
 
         print("c_p = {}".format(np.round(np.exp(self.log_context_p), 2)))
-        print("log_a{}".format(np.round(np.exp(self.log_a),2)))
+        print("a{}".format(np.round(np.exp(self.log_a), 2)))
 
     def _prune(self, th_prune):
         res = super()._prune(th_prune)
         for vlhmm in self.vlhmms:
             vlhmm.update_contexts()
         return res
+
+    def set_canonic_view(self):
+        super().set_canonic_view()
+        for vlhmm in self.vlhmms:
+            vlhmm.emission = self.emission
+            vlhmm.update_contexts()
 
 

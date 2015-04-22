@@ -27,6 +27,9 @@ class Emission():
     def set_rand_params(self):
         pass
 
+    def set_canonic_view(self):
+        pass
+
     def get_order(self):
         pass
 
@@ -92,11 +95,17 @@ class GaussianEmission(Emission):
         self.mu  = np.array(sorted(mu, key=lambda x: x[0]))
         self.sigma = np.array(sigma)
 
+    def set_canonic_view(self):
+        order = self.get_order()
+        self.mu = self.mu[order]
+        self.sigma = self.sigma[order]
+
     def get_str_params(self, t_order="sorted"):
         order = list(range(self.n_states))
         if t_order == "sorted":
             order = self.get_order()
-        return "mu:\n{}\nsigma:\n{}".format(np.round(self.mu[order],1), np.round(self.sigma[order],1))
+        return "mu:\n{}\nsigma:\n{}".format(np.round(self.mu[order],1),
+                                            np.round(self.sigma[order],1))
 
     def log_p(self, y, state):
         return multivariate_normal.logpdf(y, self.mu[state], self.sigma[state])
@@ -164,6 +173,10 @@ class PoissonEmission(Emission):
         self.alpha = np.abs(np.random.random(self.n_states)) * _var
         self.alpha[1:] += 2*self.alpha[:-1]
         self.alpha = np.sort(self.alpha)
+
+    def set_canonic_view(self):
+        order = list(range(self.n_states))
+        self.alpha = self.alpha[order]
 
     def get_str_params(self, t_order='sorted'):
         order = list(range(self.n_states))

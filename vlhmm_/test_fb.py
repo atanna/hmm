@@ -112,7 +112,7 @@ def test_hmm(type_e="Poisson", T=int(2e3), start="k-means"):
         print(name)
         text = "{}\nT = {}\ninit: {}\n".format(type_e, T, start)
         vlhmm.contexts = ["0", "1"]
-        fig = create_img(vlhmm, vlhmm.contexts, log_a, name, text)
+        fig = create_img(vlhmm, vlhmm.contexts, vlhmm.log_a, name, text)
         fig.savefig(name+".jpg")
 
         print(type_e)
@@ -158,7 +158,8 @@ def test_discrete_hmm():
     print(HMM(n).observation_log_probability(hmm.model, data))
     print()
 
-    log_p, optimal_model, h_opt_states = HMM(n).optimal_model(data, m=m, max_iter=n_iter)
+    log_p, optimal_model, h_opt_states = HMM(n).optimal_model(data, m=m,
+                                                              max_iter=n_iter)
     print("hmm:\n{}\n{}".format(optimal_model, log_p))
 
 
@@ -180,13 +181,13 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
     fname_plot = name+"plot_.png"
     vlhmm.plot_log_p().savefig(fname_plot)
     fname_trie = name+"trie_.png"
-    vlhmm_contexts, vlhmm_log_a = fb.VLHMMWang\
-        .get_sorted_contexts_and_log_a(vlhmm.contexts, vlhmm.log_a, vlhmm.emission.get_order())
-    ContextTransitionTrie.draw_context_trie(vlhmm_contexts, vlhmm_log_a, fname_trie)
+    ContextTransitionTrie.draw_context_trie(vlhmm.contexts, vlhmm.log_a,
+                                            fname_trie)
 
     if contexts is not None:
         fname_real_trie = name+"real_trie_.png"
-        ContextTransitionTrie.draw_context_trie(contexts, log_a, fname_real_trie)
+        ContextTransitionTrie.draw_context_trie(contexts, log_a,
+                                                fname_real_trie)
 
         connect_tries(fname_real_trie, fname_trie, name+"tries.png")
         fig = plt.figure()
@@ -213,41 +214,143 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
         return fig
 
 
-def main_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3, log_pr_thresh=0.15,
-              type_e="Poisson", start="k-means", save_data=False,show_e=True, **kwargs):
-    def go(vlhmm):
-        print(type_e)
-        vlhmm.fit(data, max_len=max_len, start=start, th_prune=th_prune,
-                  log_pr_thresh=log_pr_thresh, type_emission=type_e)
-        print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
-        print("T=", T, "max_len=", max_len)
-        comp_emission = "real emission\n{}\npredicted emission\n{} \n".format(e_params, vlhmm.emission.get_str_params())
-        print(comp_emission)
-        path = "graphics/vlhmm2/{}/".format(type_e)
-        if not os.path.exists(path):
-            os.makedirs(path)
-        name = "{}{}{}_{}_{}_{}".format(path, start, random.randrange(T), T, th_prune, max_len)
-        print(name)
-        text = "{}\nT = {}\ninit: {}\n\n{}\n".format(type_e, T, start, comp_emission)
-        fig = create_img(vlhmm, contexts, log_a, name, text)
-        fig.savefig(name+".jpg")
-        if save_data:
-            data_to_file(name+".txt")
-        plt.show()
+def go_vlhmm(vlhmm, data, contexts, log_a, name="", T=None,
+             real_e_params="unknown", max_len=4, **kwargs):
+    print(name)
+    vlhmm.fit(data, max_len=max_len, **kwargs)
+    if T is None:
+        T = len(data)
+    print("T=", T, "max_len=", max_len)
+    print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
+    comp_emission = "real emission\n{}\npredicted emission\n{} \n"\
+        .format(real_e_params, vlhmm.emission.get_str_params())
+    print(comp_emission)
+    print(name)
+    text = "{}\nT = {}\ninit: {}\n\n{}\n".format(vlhmm.emission.name, T,
+                                                 vlhmm.start, comp_emission)
+    fig = create_img(vlhmm, contexts, log_a, name, text)
+    fig.savefig(name+".jpg")
+    plt.show()
+
+
+def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
+                log_pr_thresh=0.15, type_e="Poisson", start="k-means",
+                save_data=False,show_e=True, **kwargs):
 
     n= len(log_a)
     h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
-    data, emission = sample_(T, n, list(map(int, h_states)), type_emission=type_e, **kwargs)
-    e_params  = emission.get_str_params()
-    print("real emission:\n{}".format(e_params))
+    data, emission = sample_(T, n, list(map(int, h_states)),
+                             type_emission=type_e, **kwargs)
+    real_e_params = emission.get_str_params()
+    print("real emission:\n{}".format(real_e_params))
     if show_e:
         emission.show()
         plt.show()
-    go(fb.VLHMMWang(n))
+
+    path = "graphics/vlhmm2/{}/".format(type_e)
+    if not os.path.exists(path):
+            os.makedirs(path)
+    name = "{}{}{}_{}_{}_{}".format(path, start, random.randrange(T), T,
+                                    th_prune, max_len)
+    if save_data:
+            data_to_file(data, name+".txt")
+    go_vlhmm(fb.VLHMMWang(n), data, contexts, log_a, name,
+             real_e_params=real_e_params, max_len=max_len, start=start,
+             th_prune=th_prune,
+             log_pr_thresh=log_pr_thresh, type_emission=type_e)
 
 
+def get_data(fname="resources/ENCFF000AWF.bam", chr_i=20, bin_size=10000):
+        samfile = pysam.AlignmentFile(fname, "rb")
+        chr_name = samfile.references[chr_i]
 
-if __name__ == "__main__":
+        N = samfile.lengths[chr_i]
+        n_bins = int(N/bin_size)+1
+        x = np.zeros(n_bins)
+
+        print(chr_name, N)
+        print("bin_size = ", bin_size)
+        print("n_bins", n_bins)
+
+        for i, read in enumerate(samfile.fetch(chr_name)):
+                if not(read.is_unmapped or read.is_duplicate):
+                        ind = round(read.pos / bin_size)
+                        x[ind] += 1
+
+        np.savetxt("resources/{}_{}.txt".format(chr_name, bin_size), x)
+        samfile.close()
+
+        return x
+
+
+def test_wang_with_data_from_file(f_name, type_e="Poisson", X=None, n=3,
+                                  max_len=3, th_prune=0.01, log_pr_thresh=0.05,
+                                  start="k-means", path = "graphics/real/"):
+    data = data_from_file(f_name)
+    print(len(data))
+    vlhmm = fb.VLHMMWang(n)
+    print(start)
+    vlhmm.fit(data, X=X,  max_len=max_len, start=start,
+              th_prune=th_prune, log_pr_thresh=log_pr_thresh,
+              type_emission=type_e)
+    print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
+    print("T=", len(data), "max_len=", max_len)
+
+
+    if not os.path.exists(path):
+        os.makedirs(path)
+    name = "{}{}_{}_{}".format(path, start, vlhmm.emission.get_str_params(),
+                               random.randrange(100))
+    print(name)
+    create_img(vlhmm, name=name)
+
+# test_wang_with_data_from_file(f_name="tests/check_data.txt", n=2, max_len=2, th_prune=6e-3, start="k-means", path="tests/check/")
+# test_wang_with_data_from_file("resources/check_test.txt", n=2, max_len=3, start="k-means", path="graphics/test/check/")
+
+# X = "000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000001111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001101000000000000000000"
+# X = X.replace("0", "2").replace("1","0").replace("2", "1")
+# test_wang_with_data_from_file("resources/check_test.txt", n=2, max_len=3, start="k-means", path="graphics/test/check/")
+# test_wang_with_data_from_file("resources/check_test_2_.txt", n=2, max_len=3, start="k-means", path="graphics/test/check2/")
+# test_wang_with_data_from_file("resources/chr21_10000.txt", max_len=4, start="k-means", type_e="Poisson")
+
+
+def get_real_data(chr_i=1, bin_size=400, thr=10):
+    data = np.genfromtxt("resources/chr{}_{}.txt".format(chr_i, bin_size))
+    arr_data = []
+    t_start, t_fin = 0, 1
+    for i, x in enumerate(data):
+        if x == 0:
+            if t_fin - t_start > thr:
+                arr_data.append(np.array(data[t_start: t_fin]))
+            t_start = t_fin
+        t_fin += 1
+    return arr_data
+
+
+def independent_fitting_parts(chr_i, bin_size, n=2, max_len=3, start="k-means"):
+    def fit_part(Y_):
+        Y = np.array(Y_)
+        print("T = {}".format(len(Y)))
+        print(Y)
+        vlhmm = fb.VLHMMWang(n)
+        vlhmm.fit(np.array(Y), max_len=max_len, start=start)
+        name = "{}{}_{}_{}_{}".format(path, start, len(Y),
+                                      vlhmm.emission.get_str_params(), ind)
+        print(name)
+        create_img(vlhmm, name=name)
+
+    path = "graphics/real/chr{}/{}/{}/".format(chr_i, bin_size,
+                                               random.randrange(1000))
+    print(path)
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    thr = 110
+    arr_data = get_real_data(chr_i, bin_size, thr)
+    for ind, data in enumerate(arr_data):
+        fit_part(data)
+
+def go_sample_test():
     contexts = ["00", "01", "10", "110", "111"]
     log_a = np.log(np.array(
         [[0.8, 0.4, 0.3, 0.2, 0.9],
@@ -291,71 +394,49 @@ if __name__ == "__main__":
 
     contexts = ["000", "0010", "0011", "01", "1"]
     log_a = np.log(np.array([
-        [0.9, 0.2, 0.4, 0.3, 0.9],
-        [0.1, 0.8, 0.6, 0.7, 0.1]
+        [0.9, 0.2, 0.65, 0.3, 0.9],
+        [0.1, 0.8, 0.35, 0.7, 0.1]
     ]
     ))
-    #
-    # contexts = ["00", "01", "1"]
-    # log_a = np.log(np.array([
-    #     [0., 0.5, 0.19],
-    #     [1., 0.5, 0.81]]))
+
+    contexts = ["00", "01", "1"]
+    log_a = np.log(np.array([
+        [0., 0.5, 0.19],
+        [1., 0.5, 0.81]]))
     # contexts = ["0", "1"]
     # log_a = np.log(np.array(
     #     [[0., 1.],
     #      [1., 0.]]
     # ))
 
+    contexts = ["0", "1"]
+    log_a = np.log(np.array(
+        [[0.8, 0.4],
+         [0.2, 0.6]]
+    ))
+
+    contexts = ["00", "01", "1"]
+    log_a = np.log(np.array(
+        [[0.7, 0.4, 0.2],
+         [0.3, 0.6, 0.8]]
+    ))
+
+
     # contexts = ["00", "01", "10", "110", "111"]
     # log_a = np.log(np.array(
     #     [[0.8, 0.4, 0.3, 0.2, 0.9],
     #      [0.2, 0.6, 0.7, 0.8, 0.1]]
     # ))
-    main_test(contexts, log_a, max_len=5, start="k-means", type_e="Poisson", T=int(1e4), th_prune=8e-3, show_e=True)
+    main_fb_wang_test(contexts, log_a, max_len=2, start="k-means",
+                      type_e="Poisson", T=int(1e3), th_prune=9e-3, show_e=True)
 
 
+def go_independent_parts_test(ch):
+    chr_i = 1
+    bin_size = 400
+    independent_fitting_parts(chr_i=chr_i, bin_size=bin_size,
+                              max_len=3, start="k-means")
 
+if __name__ == "__main__":
+    go_sample_test()
 
-
-def get_data(fname="resources/ENCFF000AWF.bam", chr_i=20, bin_size=10000):
-        samfile = pysam.AlignmentFile(fname, "rb")
-        chr_name = samfile.references[chr_i]
-
-        N = samfile.lengths[chr_i]
-        n_bins = int(N/bin_size)+1
-        x = np.zeros(n_bins)
-
-        print(chr_name, N)
-        print("bin_size = ", bin_size)
-        print("n_bins", n_bins)
-
-        for i, read in enumerate(samfile.fetch(chr_name)):
-                if not(read.is_unmapped or read.is_duplicate):
-                        ind = round(read.pos / bin_size)
-                        x[ind] += 1
-
-        np.savetxt("resources/{}_{}.txt".format(chr_name, bin_size), x)
-        samfile.close()
-
-        return x
-
-
-def test_wang_with_data_from_file(f_name, type_e="Poisson", X=None, n=3, max_len=3, th_prune=0.01, log_pr_thresh=0.05, start="k-means", path = "graphics/real/"):
-    data = data_from_file(f_name)
-    print(len(data))
-    vlhmm = fb.VLHMMWang(n)
-    print(start)
-    vlhmm.fit(data, X=X,  max_len=max_len, start=start,
-              th_prune=th_prune, log_pr_thresh=log_pr_thresh, type_emission=type_e)
-    print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
-    print("T=", len(data), "max_len=", max_len)
-
-
-    if not os.path.exists(path):
-        os.makedirs(path)
-    name = "{}{}_{}_{}".format(path, start, vlhmm.emission.get_str_params(), random.randrange(100))
-    print(name)
-    create_img(vlhmm, name=name)
-
-
-# test_wang_with_data_from_file("resources/check_test.txt", n=2, max_len=3, start="k-means", path="graphics/test/check/")

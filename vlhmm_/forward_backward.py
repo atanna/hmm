@@ -164,7 +164,7 @@ class AbstractForwardBackward():
         fig = plt.figure()
 
         l = len(self.track_log_p)
-        min_y = min(map(lambda arr: mquantiles(arr, [0.01])[0],
+        min_y = min(map(lambda arr: mquantiles(arr, [1e-3])[0],
                         self.track_log_p.values()))
         max_y = max(map(max, self.track_log_p.values()))
         dy = (max_y-min_y)/8
@@ -268,10 +268,8 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
             self._em(n_iter, log_pr_thresh)
             changes = self._prune(th_prune)
 
+        self.set_canonic_view()
         return self
-
-    def _em(self, *args, **kwargs):
-        super()._em(*args, **kwargs)
 
     @staticmethod
     def get_sorted_contexts_and_log_a(contexts, log_a, order):
@@ -289,6 +287,14 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         new_log_a = new_log_a[:,order]
 
         return new_contexts, new_log_a
+
+    def set_canonic_view(self):
+        self.contexts, self.log_a = self\
+            .get_sorted_contexts_and_log_a(self.contexts, self.log_a,
+                                           self.emission.get_order())
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
+        self.emission.set_canonic_view()
+        self.update_contexts()
 
     def sample(self, size, start=0):
         X = np.zeros((size, self.emission.n))
@@ -416,7 +422,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
                                         self.log_context_p)
 
     def _get_log_gamma_emission(self):
-        log_gamma_ = np.zeros((self.T, self.n))
+        log_gamma_ = np.log(np.zeros((self.T, self.n)))
         for q in range(self.n):
             log_gamma_[:, q] = logsumexp(self.log_gamma[:, self.state_c==q],
                                          axis=1)
