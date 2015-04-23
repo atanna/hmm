@@ -63,6 +63,7 @@ class GaussianEmission(Emission):
             tmp = (y - self.mu[state]) + eps
             self.sigma[state] = np.array((tmp.T.dot(tmp)) / len(y)) \
                 .reshape((self.n, self.n))
+        self.set_canonic_view()
 
     def update_params(self, log_gamma, log_=True):
         def get_new_params(state):
@@ -155,6 +156,7 @@ class PoissonEmission(Emission):
         for state in range(self.n_states):
             y = data[self.labels == state]
             self.alpha[state] = y.mean()
+        self.set_canonic_view()
 
     def update_params(self, log_gamma, log_=True):
         def get_new_params(state):
@@ -175,7 +177,7 @@ class PoissonEmission(Emission):
         self.alpha = np.sort(self.alpha)
 
     def set_canonic_view(self):
-        order = list(range(self.n_states))
+        order = self.get_order()
         self.alpha = self.alpha[order]
 
     def get_str_params(self, t_order='sorted'):
@@ -194,7 +196,9 @@ class PoissonEmission(Emission):
         return np.array(poisson.rvs(self.alpha[state], size=size))
 
     def get_order(self):
-        return list(map(lambda x: x[1], sorted(zip(self.alpha, range(self.n_states)), key=lambda x: x[0])))
+        return list(map(lambda x: x[1],
+                        sorted(zip(self.alpha, range(self.n_states)),
+                               key=lambda x: x[0])))
 
     def show(self, right_order=True):
         fig = plt.figure()

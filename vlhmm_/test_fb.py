@@ -222,6 +222,7 @@ def go_vlhmm(vlhmm, data, contexts, log_a, name="", T=None,
         T = len(data)
     print("T=", T, "max_len=", max_len)
     print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
+    print("context_p:", np.exp(vlhmm.log_context_p))
     comp_emission = "real emission\n{}\npredicted emission\n{} \n"\
         .format(real_e_params, vlhmm.emission.get_str_params())
     print(comp_emission)
@@ -350,7 +351,7 @@ def independent_fitting_parts(chr_i, bin_size, n=2, max_len=3, start="k-means"):
     for ind, data in enumerate(arr_data):
         fit_part(data)
 
-def go_sample_test():
+def go_main_fb_wang_test():
     contexts = ["00", "01", "10", "110", "111"]
     log_a = np.log(np.array(
         [[0.8, 0.4, 0.3, 0.2, 0.9],
@@ -420,8 +421,13 @@ def go_sample_test():
         [[0.7, 0.4, 0.2],
          [0.3, 0.6, 0.8]]
     ))
+    # contexts = [""]
+    # log_a = np.log(np.array(
+    #     [[0.25],
+    #      [0.75]]
+    # ))
 
-
+    #
     # contexts = ["00", "01", "10", "110", "111"]
     # log_a = np.log(np.array(
     #     [[0.8, 0.4, 0.3, 0.2, 0.9],
@@ -438,5 +444,5 @@ def go_independent_parts_test(ch):
                               max_len=3, start="k-means")
 
 if __name__ == "__main__":
-    go_sample_test()
+    go_main_fb_wang_test()
 

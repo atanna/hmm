@@ -203,9 +203,10 @@ class AbstractVLHMM():
             try:
                 centre, labels = kmeans2(data, self.n)
             except TypeError:
-                labels= np.random.choice(range(self.n), len(data))
+                labels = np.random.choice(range(self.n), len(data))
         else:
-            labels= np.random.choice(range(self.n), len(data))
+            labels = np.random.choice(range(self.n), len(data))
+
         self.X = "".join(list(map(str, labels)))
 
     def get_list_c(self, *args):
@@ -271,43 +272,6 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.set_canonic_view()
         return self
 
-    @staticmethod
-    def get_sorted_contexts_and_log_a(contexts, log_a, order):
-        n = len(log_a)
-        d = dict(zip(order, range(n)))
-        new_contexts =  []
-        for c in contexts:
-            new_c = "".join(list(map(lambda q: str(d[int(q)]), c)))
-            new_contexts.append(new_c)
-        new_log_a = log_a[order, :]
-
-        tmp = sorted(zip(new_contexts, range(len(contexts))))
-        new_contexts = list(map(lambda x: x[0], tmp))
-        order = list(map(lambda x: x[1], tmp))
-        new_log_a = new_log_a[:,order]
-
-        return new_contexts, new_log_a
-
-    def set_canonic_view(self):
-        self.contexts, self.log_a = self\
-            .get_sorted_contexts_and_log_a(self.contexts, self.log_a,
-                                           self.emission.get_order())
-        self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
-        self.emission.set_canonic_view()
-        self.update_contexts()
-
-    def sample(self, size, start=0):
-        X = np.zeros((size, self.emission.n))
-        c = self.contexts[start]
-        index_c = self.id_c[c]
-        states = np.arange(self.n)
-        for i in range(size):
-            q = int(np.random.choice(states, p=np.exp(self.log_a[:, index_c])))
-            X[i] = self.emission.sample(q)
-            c = self.tr_trie.get_c(str(q)+c)
-            index_c = self.id_c[c]
-        return X
-
     def _prune(self, th_prune):
         self.track_e_params[self.n_contexts] = self.emission.get_str_params()
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
@@ -328,7 +292,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         log_context_p = np.log(np.zeros(n_contexts))
         id_c = dict(zip(contexts, range(n_contexts)))
         if n_contexts == 1:
-            self.log_context_p = logsumexp(self.log_context_p)
+            self.log_context_p[0] = logsumexp(self.log_context_p)
         else:
             for old_i, old_c in enumerate(self.contexts):
                 assert len(self.tr_trie.get_list_c(old_c)) == 1, \
@@ -338,10 +302,10 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
                 i = id_c[c]
                 log_context_p[i] = np.logaddexp(log_context_p[i],
                                          self.log_context_p[old_i])
-        print("old_p: {}\n new_p: {}"
-              .format(np.round(np.exp(self.log_context_p),2),
-                      np.round(np.exp(log_context_p),2)))
-        self.log_context_p = log_context_p
+            print("old_p: {}\n new_p: {}"
+                  .format(np.round(np.exp(self.log_context_p), 2),
+                          np.round(np.exp(log_context_p), 2)))
+            self.log_context_p = log_context_p
         self.contexts = contexts
         self.n_contexts = n_contexts
         self.id_c = id_c
@@ -432,6 +396,46 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def update_emission_params(self):
         self.emission.update_params(self._get_log_gamma_emission())
 
+    @staticmethod
+    def _get_context_order(contexts, state_order):
+        n = len(state_order)
+        d = dict(zip(state_order, range(n)))
+        new_contexts = []
+        for c in contexts:
+            new_c = "".join(list(map(lambda q: str(d[int(q)]), c)))
+            new_contexts.append(new_c)
+        tmp = sorted(zip(new_contexts, range(len(contexts))))
+        c_order = list(map(lambda x: x[1], tmp))
+        return c_order
+
+    @staticmethod
+    def get_sorted_contexts_and_log_a(contexts, log_a, state_order):
+        c_order= VLHMMWang._get_context_order(contexts, state_order)
+
+        return list(np.array(contexts)[c_order]), log_a[state_order, :][:, c_order]
+
+    def set_canonic_view(self):
+        state_order = self.emission.get_order()
+        c_order = self._get_context_order(self.contexts, state_order)
+        contexts = list(map(lambda i: self.contexts[c_order[i]], range(self.n_contexts)))
+        self.contexts = contexts
+        self.log_a = self.log_a[state_order, :][:, c_order]
+        self.log_context_p = self.log_context_p[c_order]
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts, self.log_context_p)
+        self.emission.set_canonic_view()
+
+    def sample(self, size, start=0):
+        X = np.zeros((size, self.emission.n))
+        c = self.contexts[start]
+        index_c = self.id_c[c]
+        states = np.arange(self.n)
+        for i in range(size):
+            q = int(np.random.choice(states, p=np.exp(self.log_a[:, index_c])))
+            X[i] = self.emission.sample(q)
+            c = self.tr_trie.get_c(str(q)+c)
+            index_c = self.id_c[c]
+        return X
+
 
 class HMM(AbstractForwardBackward):
     def __init__(self, n):
@@ -445,9 +449,9 @@ class HMM(AbstractForwardBackward):
             try:
                 centre, labels = kmeans2(data, self.n)
             except TypeError:
-                labels= np.random.choice(range(self.n), len(data))
+                labels = np.random.choice(range(self.n), len(data))
         else:
-            labels= np.random.choice(range(self.n), len(data))
+            labels = np.random.choice(range(self.n), len(data))
         self.X = "".join(list(map(str, labels)))
 
     def _init_a(self):

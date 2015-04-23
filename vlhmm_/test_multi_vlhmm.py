@@ -98,7 +98,7 @@ def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
             f.write("c_p: {}\n".format(np.exp(vlhmm.log_context_p)))
         # plt.show()
 
-    path = "{}/{}/".format(_path, random.randrange(1e3))
+    path = "{}/{}_{}_{}/".format(_path, max_len, start, random.randrange(1e3))
     print(start)
     if not os.path.exists(path):
             os.makedirs(path)
@@ -107,9 +107,10 @@ def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
     with open("{}info.txt".format(path), "wt") as f:
         f.write("T={}\nstart={}\nmax_len={}\nth_prune={}\nlog_pr_thresh={}\n"
               .format(T, start, max_len, th_prune,log_pr_thresh))
-        f.write("T {}\n\n".format([len(d) for d in arr_data]))
-        for i, d in enumerate(arr_data):
-            f.write("{}:\n{}\n".format(i, d))
+        f.write("T {} {}\n\n".format(len(arr_data), [len(d) for d in arr_data]))
+        if len(arr_data) < 100:
+            for i, d in enumerate(arr_data):
+                f.write("{}:\n{}\n".format(i, d))
 
     go(MultiVLHMM(n))
 
@@ -146,20 +147,24 @@ def go_sample_test():
     # ))
 
     main_multi_vlhmm_test(contexts, log_a, T=int(1e3), max_len=2,
-              max_log_p_diff=10,
+              max_log_p_diff=1.5,
               n_parts=5, th_prune=6e-3, start="k-means", show_e=False)
 
 
 def go_real_test():
-    chr_i = 1
-    bin_size = 200
-    thr = 45
+    for chr_i in range(1, 22):
+        bin_size = 200
+        max_len = 4
+        thr = 45
 
-    arr_data = get_real_data(chr_i, bin_size, thr=thr)
-    print(len(arr_data))
-    real_test(arr_data,
-              _path="graphics/multi/real/chr_{}/{}/".format(chr_i,bin_size),
-              max_len=1, start="k-means", max_log_p_diff=1.5)
+        arr_data = get_real_data(chr_i, bin_size, thr=thr)
+        print(len(arr_data))
+        try:
+            real_test(arr_data,
+                      _path="graphics2/multi/real/chr_{}/bin_size_{}/min_len_seq_{}".format(chr_i, bin_size, thr),
+                      max_len=max_len, start="k-means", max_log_p_diff=1.5)
+        except Exception:
+            continue
 
 
     # poisson_hmm(arr_data, _path="graphics/multi/real/chr_{}/{}/"
@@ -167,5 +172,5 @@ def go_real_test():
 
 
 if __name__ == "__main__":
-    go_sample_test()
-    # go_real_test()
+    # go_sample_test()
+    go_real_test()

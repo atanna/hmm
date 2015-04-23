@@ -222,6 +222,7 @@ class ContextTransitionTrie():
         """
         self.log_c_tr_trie = datrie.Trie(self.alphabet)
         self.seq_contexts = seq_contexts
+        self.n_contexts = len(seq_contexts)
         self._max_len = max(list(map(len, self.seq_contexts)))
         for i, c in enumerate(seq_contexts):
             for q in self.alphabet:
