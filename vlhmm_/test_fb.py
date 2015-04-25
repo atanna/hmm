@@ -214,9 +214,9 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
         return fig
 
 
-def go_vlhmm(vlhmm, data, contexts, log_a, name="", T=None,
+def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
              real_e_params="unknown", max_len=4, **kwargs):
-    print(name)
+    print(path)
     vlhmm.fit(data, max_len=max_len, **kwargs)
     if T is None:
         T = len(data)
@@ -226,12 +226,21 @@ def go_vlhmm(vlhmm, data, contexts, log_a, name="", T=None,
     comp_emission = "real emission\n{}\npredicted emission\n{} \n"\
         .format(real_e_params, vlhmm.emission.get_str_params())
     print(comp_emission)
-    print(name)
+    print(path)
     text = "{}\nT = {}\ninit: {}\n\n{}\n".format(vlhmm.emission.name, T,
                                                  vlhmm.start, comp_emission)
-    fig = create_img(vlhmm, contexts, log_a, name, text)
-    fig.savefig(name+".jpg")
+    fig = create_img(vlhmm, contexts, log_a, path, text)
+    fig.savefig(path)
     plt.show()
+    with open("{}info.txt".format(path), "a") as f:
+            f.write("\n\n")
+            f.write("T={}  max_len={}\n".format(T, max_len))
+            f.write("{}\n".format(kwargs))
+            f.write("emission: {}\n".format(vlhmm.emission.get_str_params()))
+            f.write("contexts: {}\n".format(vlhmm.contexts))
+            f.write("a: {}\n".format(np.round(np.exp(vlhmm.log_a), 4)))
+            f.write("log_c_p: {}\n".format(vlhmm.log_context_p))
+            f.write("c_p: {}\n".format(np.exp(vlhmm.log_context_p)))
 
 
 def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
@@ -248,14 +257,12 @@ def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
         emission.show()
         plt.show()
 
-    path = "graphics/vlhmm2/{}/".format(type_e)
+    path = "graphics/vlhmm2/{}/".format(random.randrange(T))
     if not os.path.exists(path):
             os.makedirs(path)
-    name = "{}{}{}_{}_{}_{}".format(path, start, random.randrange(T), T,
-                                    th_prune, max_len)
     if save_data:
-            data_to_file(data, name+".txt")
-    go_vlhmm(fb.VLHMMWang(n), data, contexts, log_a, name,
+            data_to_file(data, path+".txt")
+    go_vlhmm(fb.VLHMMWang(n), data, contexts, log_a, path=path,
              real_e_params=real_e_params, max_len=max_len, start=start,
              th_prune=th_prune,
              log_pr_thresh=log_pr_thresh, type_emission=type_e)
@@ -427,14 +434,14 @@ def go_main_fb_wang_test():
     #      [0.75]]
     # ))
 
-    #
-    # contexts = ["00", "01", "10", "110", "111"]
-    # log_a = np.log(np.array(
-    #     [[0.8, 0.4, 0.3, 0.2, 0.9],
-    #      [0.2, 0.6, 0.7, 0.8, 0.1]]
-    # ))
-    main_fb_wang_test(contexts, log_a, max_len=2, start="k-means",
-                      type_e="Poisson", T=int(1e3), th_prune=9e-3, show_e=True)
+
+    contexts = ["00", "01", "10", "110", "111"]
+    log_a = np.log(np.array(
+        [[0.8, 0.4, 0.3, 0.2, 0.9],
+         [0.2, 0.6, 0.7, 0.8, 0.1]]
+    ))
+    main_fb_wang_test(contexts, log_a, max_len=4, start="k-means",
+                      type_e="Poisson", T=int(1e3), th_prune=0.01, show_e=True)
 
 
 def go_independent_parts_test(ch):

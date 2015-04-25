@@ -147,7 +147,10 @@ class PoissonEmission(Emission):
         self.name = "Poisson"
         super().__init__(*args, **kwargs)
 
-    def _set_params(self, alpha):
+    def _set_params(self, alpha=None):
+        if alpha is None:
+            self.set_rand_params()
+            return
         self.n_states = len(alpha)
         self.alpha = alpha
 

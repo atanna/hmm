@@ -232,7 +232,8 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.log_context_p = np.log(np.ones(self.n_contexts) / self.n_contexts)
 
         super()._init(data)
-        self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
+                                        self.log_context_p)
         print("n_contexts:", self.n_contexts)
         print("contexts: {}".format(self.contexts))
         print("a: \n{}".format(np.round(np.exp(self.log_a),2)))
@@ -245,7 +246,8 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         print(self.tr_trie.log_c_tr_trie.items())
         self.log_a = self.tr_trie.count_log_a(self.start)
         print(len(self.log_a))
-        self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
+                                        self.log_context_p)
 
     def _prepare_to_fitting(self, *args, **kwargs):
         self.max_len = kwargs.get("max_len", 3)
@@ -274,15 +276,16 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
 
     def _prune(self, th_prune):
         self.track_e_params[self.n_contexts] = self.emission.get_str_params()
-        self.tr_trie.recount_with_log_a(self.log_a, self.contexts)
-        prune = changes = self.tr_trie.prune(th_prune)
-        while changes:
-            print("prune", changes)
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
+                                        self.log_context_p)
+        prune = False
+        while self.tr_trie.prune(th_prune):
+            print("prune")
             print(self.tr_trie.seq_contexts)
             self.update_contexts()
             if self.n_contexts == 1:
                 return False
-            changes = self.tr_trie.prune(th_prune)
+            prune = True
         return prune
 
     def update_contexts(self):
@@ -380,7 +383,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         print("p_state ", np.round(np.exp(logsumexp(self.log_gamma, axis=0)), 4))
         self.log_context_p = logsumexp(self.log_gamma, axis=0)
         self.log_context_p -= logsumexp(self.log_context_p)
-        print("c_p = {}".format(np.round(np.exp(self.log_context_p),2)))
+        print("c_p = {}".format(np.round(np.exp(self.log_context_p), 2)))
         super().update_tr_params()
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
@@ -417,11 +420,13 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def set_canonic_view(self):
         state_order = self.emission.get_order()
         c_order = self._get_context_order(self.contexts, state_order)
-        contexts = list(map(lambda i: self.contexts[c_order[i]], range(self.n_contexts)))
+        contexts = list(map(lambda i: self.contexts[c_order[i]],
+                            range(self.n_contexts)))
         self.contexts = contexts
         self.log_a = self.log_a[state_order, :][:, c_order]
         self.log_context_p = self.log_context_p[c_order]
-        self.tr_trie.recount_with_log_a(self.log_a, self.contexts, self.log_context_p)
+        self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
+                                        self.log_context_p)
         self.emission.set_canonic_view()
 
     def sample(self, size, start=0):

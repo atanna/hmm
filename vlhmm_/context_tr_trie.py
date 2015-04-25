@@ -34,11 +34,12 @@ class ContextTransitionTrie():
         self.recount_with_log_a(log_a, self.seq_contexts)
 
     def _init_tr_trie(self, data):
-        def freq(w):
+        def freq(w, eps=1e-8):
             try:
-                return trie[w]
+                res = trie[w]
+                return res if res != 0 else eps
             except KeyError:
-                return 0
+                return eps
 
         def log_tr_p(q, c):
             freq_c = freq(c)
@@ -129,7 +130,7 @@ class ContextTransitionTrie():
         res = np.log(0.)
         for w, log_p in self.log_c_tr_trie.items(s):
             if log_p != -np.inf:
-                res = np.logaddexp(res, log_p)
+                res = np.logaddexp(res, log_p+self.contexts[w[1:]])
         return res
 
     def log_tr_p(self, q, s):
@@ -152,7 +153,9 @@ class ContextTransitionTrie():
                 if np.isnan(log_sum_p_):
                     continue
                 denom = np.logaddexp(denom, log_sum_p_)
-            assert denom > -np.inf, "q={}s={}  {}\n{}".format(q,s, res, self.log_c_tr_trie.items())
+            assert denom > -np.inf, "q={} s={}  {}\n{}\n{}"\
+                .format(q, s, res, self.log_c_tr_trie.items(),
+                        self.contexts.items())
             res = res - denom
             self._log_tr_trie[qs] = res
             return res
@@ -297,9 +300,12 @@ class ContextTransitionTrie():
         for c in c_to_del.keys():
             for s in list(self.log_c_tr_trie.keys(c)):
                 self.log_c_tr_trie._delitem(s)
-        self.contexts = datrie.Trie(self.alphabet)
+        contexts = datrie.Trie(self.alphabet)
         for s in self.log_c_tr_trie.keys():
-            self.contexts[s[1:]] = 1
+            c = s[1:]
+            _, log_c_p = zip(*self.contexts.items(c))
+            contexts[c] = logsumexp(log_c_p)
+        self.contexts = contexts
         self._upd_c()
         self.recount_tr_trie()
         return n_prune > 0
@@ -309,8 +315,8 @@ class ContextTransitionTrie():
         for q in self.alphabet:
             sum += self.tr_p(q, s+q_)\
                    * (self.log_tr_p(q, s+q_)-self.log_tr_p(q, s))
-        _, p = zip(*self.contexts.items(s))
-        return np.exp(logsumexp(p)) * sum
+        _, log_c_p = zip(*self.contexts.items(s))
+        return np.exp(logsumexp(log_c_p)) * sum
 
     def draw(self, fname=None):
         return self.draw_context_trie(self.seq_contexts,

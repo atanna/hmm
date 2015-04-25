@@ -41,6 +41,7 @@ class OneOfManyVLHMM(VLHMMWang):
         self.log_context_p = self.parent.log_context_p
         self.state_c = self.parent.state_c
         self.id_c = self.parent.id_c
+        self.tr_trie = self.parent.tr_trie
         self._init_auxiliary_params()
 
 
@@ -54,7 +55,7 @@ class MultiVLHMM(VLHMMWang):
 
         self.data = np.concatenate(arr_data)
 
-        super()._prepare_to_fitting(self.data, X=self.X, **(kwargs))
+        super()._prepare_to_fitting(self.data, X=self.X, **kwargs)
 
         self.n_vlhmms = len(arr_data)
         self.vlhmms = []
