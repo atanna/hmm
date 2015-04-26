@@ -1,0 +1,10 @@
+
+
+T=1000  max_len=3
+{'th_prune': 0.01, 'log_pr_thresh': 0.15, 'start': 'rand', 'type_emission': 'Poisson'}
+emission: $\lambda$ = [  2.7  15.3]
+contexts: ['']
+a: [[ 0.4121]
+ [ 0.5879]]
+log_c_p: [  3.33066907e-16]
+c_p: [ 1.]
