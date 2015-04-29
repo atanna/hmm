@@ -46,6 +46,7 @@ class OneOfManyVLHMM(VLHMMWang):
         self._init_auxiliary_params()
 
     def _e_step(self):
+        print("_e_step")
         super()._e_step()
 
 
@@ -69,7 +70,7 @@ class MultiVLHMM(VLHMMWang):
     def _e_step(self):
         self._log_p = np.log(1.)
         t = 0
-        Parallel(n_jobs=1)(
+        Parallel(n_jobs=2)(
             delayed(vlhmm._e_step)()
             for vlhmm in self.vlhmms)
 
