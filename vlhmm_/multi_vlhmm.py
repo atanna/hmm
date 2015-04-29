@@ -1,5 +1,6 @@
-from collections import defaultdict
 import numpy as np
+from joblib import Parallel, delayed
+from collections import defaultdict
 from scipy.misc import logsumexp
 from vlhmm_.forward_backward import VLHMMWang
 
@@ -44,6 +45,9 @@ class OneOfManyVLHMM(VLHMMWang):
         self.tr_trie = self.parent.tr_trie
         self._init_auxiliary_params()
 
+    def _e_step(self):
+        super()._e_step()
+
 
 class MultiVLHMM(VLHMMWang):
 
@@ -65,9 +69,13 @@ class MultiVLHMM(VLHMMWang):
     def _e_step(self):
         self._log_p = np.log(1.)
         t = 0
+        Parallel(n_jobs=1)(
+            delayed(vlhmm._e_step)()
+            for vlhmm in self.vlhmms)
+
         for vlhmm in self.vlhmms:
             T = vlhmm.T
-            vlhmm._e_step()
+            # vlhmm._e_step()
             self.log_gamma[t: t+T] = vlhmm.log_gamma
             self._log_p = self._log_p + vlhmm._log_p
             t += T

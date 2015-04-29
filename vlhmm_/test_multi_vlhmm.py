@@ -9,6 +9,7 @@ from vlhmm_.multi_vlhmm import MultiVLHMM
 from vlhmm_.tests.poisson_hmm import PoissonHMM
 
 
+
 def get_parts(data, boards_parts=[0., 0.5, 0.75, 1.]):
     T = len(data)
 
@@ -66,6 +67,12 @@ def main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=None,
              th_prune=th_prune,
              log_pr_thresh=log_pr_thresh, type_emission=type_e,
              max_log_p_diff=max_log_p_diff)
+    logprob = poisson_hmm(arr_data, _path="{}poisson_hmm.txt".format(path))
+    print("lgprob:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm._log_p, logprob[-1], vlhmm._log_p-logprob[-1]))
+    hmm_n_params = 2*(1+n)+n
+    hmm_aic = 2*(hmm_n_params-logprob[-1])
+    print("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
+    print("aic:\nvlhmm = {},  hmm = {}   diff= {}".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
 
 
 def get_real_data(chr_i=1, bin_size=400, thr=10):
@@ -120,15 +127,17 @@ def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
     go(MultiVLHMM(n))
 
 
-def poisson_hmm(arr_data, _path, thr):
+def poisson_hmm(arr_data, _path, text=""):
     hmm = PoissonHMM(n_components=2)
-    hmm.fit(arr_data)
+    logprob, _ = hmm.fit(arr_data)
     with open(_path + "PoissonHMM.txt", "wt") as f:
         f.write("a {}\n\n".format(hmm.transmat_))
         f.write("log_a {}\n\n".format(hmm._log_transmat))
         f.write("lambda: {}\n\n".format(hmm.rates_))
-        f.write("\nthr={}\nn_data={}".format(thr, len(arr_data)))
+        f.write("\nn_data={}\n".format(len(arr_data)))
+        f.write("{}".format(text))
     print()
+    return logprob
 
 
 def go_sample_test():
@@ -141,9 +150,6 @@ def go_sample_test():
          [0.2, 0.6]]
     ))
 
-    contexts = ["00", "01", "1"]
-    log_a = np.log(np.array([[0.7, 0.4, 0.2], [0.3, 0.6, 0.8]]
-    ))
 
     contexts = ["00", "01", "10", "110", "111"]
     log_a = np.log(np.array(
@@ -151,15 +157,24 @@ def go_sample_test():
          [0.2, 0.6, 0.7, 0.8, 0.1]]
     ))
 
-    alpha = np.array([5.4,  40.3])
-    contexts = ['00', '010', '011', '1']
+    # alpha = np.array([5.4,  40.3])
+    # contexts = ['00', '010', '011', '1']
+    # log_a = np.log(np.array(
+    #     [[0.9462,  0.5248,  1., 0.7132],
+    #      [0.0538,  0.4752,  0., 0.2868]]))
+    # arr_T = [51, 51, 61, 52, 65, 58, 69]
+    n_parts = 5
+    contexts = [""]
     log_a = np.log(np.array(
-        [[0.9462,  0.5248,  1., 0.7132],
-         [0.0538,  0.4752,  0., 0.2868]]))
-    arr_T = [51, 51, 61, 52, 65, 58, 69]
-    main_multi_vlhmm_test(contexts, log_a, T=int(4e3), arr_T=arr_T, max_len=4,
+        [[0.4],
+         [0.6]]
+    ))
+    # contexts = ["00", "01", "1"]
+    # log_a = np.log(np.array([[0.7, 0.4, 0.2], [0.3, 0.6, 0.8]]
+    # ))
+    main_multi_vlhmm_test(contexts, log_a, T=int(4e2), arr_T=arr_T, max_len=2,
                           max_log_p_diff=1.5,
-                          n_parts=5, th_prune=0.015, start="k-means",
+                          n_parts=n_parts, th_prune=0.015, start="k-means",
                           show_e=False, alpha=alpha)
 
 
@@ -167,22 +182,22 @@ def go_real_test():
     for chr_i in range(1, 22):
         bin_size = 200
         max_len = 4
-        thr = 40
+        thr = 30
 
         arr_data = get_real_data(chr_i, bin_size, thr=thr)
         print(len(arr_data))
         try:
             real_test(arr_data,
-                      _path="graphics3/multi/real/chr_{}/bin_size_{}/min_len_seq_{}".format(
+                      _path="graphics4/multi/real/chr_{}/bin_size_{}/min_len_seq_{}".format(
                           chr_i, bin_size, thr),
-                      max_len=max_len, start="k-", max_log_p_diff=1.5,
-                      th_prune=0.005)
+                      max_len=max_len, start="rand", max_log_p_diff=1.5,
+                      th_prune=0.015)
         except Exception:
             continue
 
 
             # poisson_hmm(arr_data, _path="graphics/multi/real/chr_{}/{}/"
-            # .format(chr_i, bin_size), thr=thr)
+            # .format(chr_i, bin_size), text="thr={}".format(thr))
 
 
 if __name__ == "__main__":

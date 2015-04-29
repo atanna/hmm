@@ -230,7 +230,7 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
     text = "{}\nT = {}\ninit: {}\n\n{}\n".format(vlhmm.emission.name, T,
                                                  vlhmm.start, comp_emission)
     fig = create_img(vlhmm, contexts, log_a, path, text)
-    fig.savefig(path)
+    fig.savefig(path+'main')
     plt.show()
     with open("{}info.txt".format(path), "a") as f:
             f.write("\n\n")
@@ -253,13 +253,14 @@ def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
                              type_emission=type_e, **kwargs)
     real_e_params = emission.get_str_params()
     print("real emission:\n{}".format(real_e_params))
-    if show_e:
-        emission.show()
-        plt.show()
-
     path = "graphics/vlhmm2/{}/".format(random.randrange(T))
     if not os.path.exists(path):
             os.makedirs(path)
+    if show_e:
+        fig = emission.show()
+        fig.savefig("{}real_emission.png".format(path))
+        plt.show()
+
     if save_data:
             data_to_file(data, path+".txt")
     go_vlhmm(fb.VLHMMWang(n), data, contexts, log_a, path=path,
@@ -293,7 +294,7 @@ def get_data(fname="resources/ENCFF000AWF.bam", chr_i=20, bin_size=10000):
 
 def test_wang_with_data_from_file(f_name, type_e="Poisson", X=None, n=3,
                                   max_len=3, th_prune=0.01, log_pr_thresh=0.05,
-                                  start="k-means", path = "graphics/real/"):
+                                  start="k-means", path="graphics/real/"):
     data = data_from_file(f_name)
     print(len(data))
     vlhmm = fb.VLHMMWang(n)
@@ -423,16 +424,23 @@ def go_main_fb_wang_test():
          [0.2, 0.6]]
     ))
 
-    contexts = ["00", "01", "1"]
-    log_a = np.log(np.array(
-        [[0.7, 0.4, 0.2],
-         [0.3, 0.6, 0.8]]
-    ))
+    # contexts = ["00", "01", "1"]
+    # log_a = np.log(np.array(
+    #     [[0.7, 0.4, 0.2],
+    #      [0.3, 0.6, 0.8]]
+    # ))
     # contexts = [""]
     # log_a = np.log(np.array(
-    #     [[0.25],
-    #      [0.75]]
+    #     [[0.4],
+    #      [0.6]]
     # ))
+
+    contexts = ["000", "0010", "0011", "01", "1"]
+    log_a = np.log(np.array([
+        [0.9, 0.2, 0.65, 0.3, 0.9],
+        [0.1, 0.8, 0.35, 0.7, 0.1]
+    ]
+    ))
 
 
     contexts = ["00", "01", "10", "110", "111"]
@@ -440,8 +448,9 @@ def go_main_fb_wang_test():
         [[0.8, 0.4, 0.3, 0.2, 0.9],
          [0.2, 0.6, 0.7, 0.8, 0.1]]
     ))
-    main_fb_wang_test(contexts, log_a, max_len=4, start="k-means",
-                      type_e="Poisson", T=int(1e3), th_prune=0.01, show_e=True)
+    main_fb_wang_test(contexts, log_a, max_len=4, start="rand",
+                      type_e="Poisson", T=int(4e3), th_prune=0.01, show_e=True,
+                      log_pr_thresh=0.01)
 
 
 def go_independent_parts_test(ch):

@@ -399,6 +399,12 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def update_emission_params(self):
         self.emission.update_params(self._get_log_gamma_emission())
 
+    def get_n_params(self):
+        return self.n_contexts*(1+self.n) + self.emission.get_n_params()
+
+    def get_aic(self):
+        return 2*(self.get_n_params() - self._log_p)
+
     @staticmethod
     def _get_context_order(contexts, state_order):
         n = len(state_order)

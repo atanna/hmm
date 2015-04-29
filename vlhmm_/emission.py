@@ -147,6 +147,9 @@ class PoissonEmission(Emission):
         self.name = "Poisson"
         super().__init__(*args, **kwargs)
 
+    def get_n_params(self):
+        return len(self.alpha)
+
     def _set_params(self, alpha=None):
         if alpha is None:
             self.set_rand_params()
@@ -187,7 +190,7 @@ class PoissonEmission(Emission):
         order = list(range(self.n_states))
         if t_order == "sorted":
             order = self.get_order()
-        return "lambda: {}".format(np.round(self.alpha[order], 1))
+        return "$\\lambda$ = {}".format(np.round(self.alpha[order], 1))
 
     def log_p(self, y, state):
         return poisson.logpmf(y, self.alpha[state])
@@ -204,18 +207,23 @@ class PoissonEmission(Emission):
                                key=lambda x: x[0])))
 
     def show(self, right_order=True):
-        fig = plt.figure()
         if right_order:
             alpha = self.alpha[self.get_order()]
         else:
             alpha = self.alpha
-        max_x = int(2*max(alpha)+1)
+        fig = plt.figure()
+        ax = fig.add_subplot("111")
+        max_x = int(2*max(alpha))+1
         x = np.array(list(range(max_x)))
         for i, alph in enumerate(alpha):
-            y = poisson.pmf(x, alph)
-            plt.plot(x, y, "o",  label="state {}, lambda={}".format(i, np.round(alph,2)))
-            plt.vlines(x, [0], y)
-        plt.legend(loc='upper right')
+            y = scipy.stats.poisson.pmf(x, alph)
+            ax.plot(x, y, "o",  label="state {}, $\\lambda$ = {}"
+                    .format(i, np.round(alph, 2)))
+            ax.set_title("Emission density functions")
+            ax.set_xlabel("x")
+            ax.set_ylabel('p(x)')
+            ax.vlines(x, [0], y)
+        ax.legend(loc='upper right')
         return fig
 
 
