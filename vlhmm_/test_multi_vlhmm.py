@@ -4,9 +4,9 @@ import numpy as np
 import pylab as plt
 from scipy.stats.mstats_basic import mquantiles
 from vlhmm_.context_tr_trie import ContextTransitionTrie
+from vlhmm_.poisson_hmm import PoissonHMM
 from vlhmm_.test_fb import create_img, data_to_file, sample_, go_vlhmm
 from vlhmm_.multi_vlhmm import MultiVLHMM
-from vlhmm_.tests.poisson_hmm import PoissonHMM
 
 
 

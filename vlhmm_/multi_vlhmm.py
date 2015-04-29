@@ -21,7 +21,7 @@ class OneOfManyVLHMM(VLHMMWang):
         self.track_log_p = defaultdict(list)
         self.emission = self.parent.emission
         self.track_e_params = self.parent.track_e_params
-        self.tr_trie =self.parent.tr_trie
+        self.tr_trie = self.parent.tr_trie
         self.max_log_p_diff = self.parent.max_log_p_diff
         self.update_contexts()
 
