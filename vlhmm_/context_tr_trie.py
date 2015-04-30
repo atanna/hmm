@@ -1,8 +1,20 @@
-import datrie
 import random
+import datrie
 import numpy as np
 from pygraphviz import AGraph
 from scipy.misc import logsumexp
+from datrie import AlphaMap
+
+
+class PickledTrie(datrie.Trie):
+    _alpha_map = None
+
+    def __init__(self, alpha_map=None):
+        self._alpha_map = alpha_map
+        super(PickledTrie, self).__init__(alpha_map=AlphaMap(alpha_map))
+
+    def __reduce__(self):
+       return PickledTrie, (self._alpha_map, ), None, None, iter(self.items())
 
 
 class ContextTransitionTrie():
@@ -76,7 +88,7 @@ class ContextTransitionTrie():
         print("build trie...")
         _data = data[::-1]
         self._end = _data[:self._max_len]
-        trie = datrie.Trie(self.alphabet)
+        trie = PickledTrie(self.alphabet)
         self.T = len(_data)
         min_num=1
         term_nodes = set()
@@ -191,7 +203,7 @@ class ContextTransitionTrie():
         recount transition probability on all substrings of contexts
         :return:
         """
-        self._log_tr_trie = datrie.Trie(self.alphabet)
+        self._log_tr_trie = PickledTrie(self.alphabet)
 
     def recount_c_tr_trie(self):
         """
@@ -223,14 +235,14 @@ class ContextTransitionTrie():
         recount transition probability using matrix of probability
         :return:
         """
-        self.log_c_tr_trie = datrie.Trie(self.alphabet)
+        self.log_c_tr_trie = PickledTrie(self.alphabet)
         self.seq_contexts = seq_contexts
         self.n_contexts = len(seq_contexts)
         self._max_len = max(list(map(len, self.seq_contexts)))
         for i, c in enumerate(seq_contexts):
             for q in self.alphabet:
                 self.log_c_tr_trie[q + c] = log_a[q, i]
-        self.contexts = datrie.Trie(self.alphabet)
+        self.contexts = PickledTrie(self.alphabet)
         if log_c_p is None:
             log_c_p = np.log(np.ones(self.n_contexts)/self.n_contexts)
         for i, c in enumerate(seq_contexts):
@@ -287,8 +299,8 @@ class ContextTransitionTrie():
             return False
         n_prune = 0
         used = set()
-        changed_tr = datrie.Trie(self.alphabet)
-        c_to_del = datrie.Trie(self.alphabet)
+        changed_tr = PickledTrie(self.alphabet)
+        c_to_del = PickledTrie(self.alphabet)
         for c in self.contexts.keys():
             if f(c[:-1]):
                 n_prune += 1
@@ -300,7 +312,7 @@ class ContextTransitionTrie():
         for c in c_to_del.keys():
             for s in list(self.log_c_tr_trie.keys(c)):
                 self.log_c_tr_trie._delitem(s)
-        contexts = datrie.Trie(self.alphabet)
+        contexts = PickledTrie(self.alphabet)
         for s in self.log_c_tr_trie.keys():
             c = s[1:]
             _, log_c_p = zip(*self.contexts.items(c))
