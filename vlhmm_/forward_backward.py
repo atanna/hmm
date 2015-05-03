@@ -72,9 +72,9 @@ class AbstractForwardBackward():
         return self
 
     def _e_step(self):
-            self.log_forward()
-            self.log_backward()
-            self._log_gamma()
+        self.log_forward()
+        self.log_backward()
+        self._log_gamma()
 
     def _m_step(self):
         self.update_tr_params()

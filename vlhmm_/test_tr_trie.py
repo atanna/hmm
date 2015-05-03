@@ -157,11 +157,11 @@ def test_():
         [[0.95,  1.,  0.34,  1.,  0.74],
          [0.05,  0.,  0.66,  0.,  0.26]])
 
-    prune_test(contexts, log_a, log_c_p=log_c_p, th_prune=0.02)
+    # prune_test(contexts, log_a, log_c_p=log_c_p, th_prune=0.02)
 
     T = int(1e4)
     # T = 407
     max_len = 4
-    # test_context_tr_trie_sample(contexts, log_a, max_len=max_len, T=T, th_prune=0.01, log_c_p=log_c_p, draw=True)
+    test_context_tr_trie_sample(contexts, log_a, max_len=max_len, T=T, th_prune=0.01, log_c_p=log_c_p, draw=True)
     # test_context_tr_trie_sample(contexts, log_a, max_len=6, T=int(1e4), th_prune=2e-2)
 test_()

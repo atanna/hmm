@@ -181,6 +181,7 @@ class PoissonEmission(Emission):
         self.alpha = np.abs(np.random.random(self.n_states)) * _var
         self.alpha[1:] += 2*self.alpha[:-1]
         self.alpha = np.sort(self.alpha)
+        return self
 
     def set_canonic_view(self):
         order = self.get_order()

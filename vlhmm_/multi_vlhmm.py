@@ -70,6 +70,7 @@ class MultiVLHMM(VLHMMWang):
     def _e_step(self):
         self._log_p = np.log(1.)
         t = 0
+        print("e")
         Parallel(n_jobs=2)(
             delayed(vlhmm._e_step)()
             for vlhmm in self.vlhmms)

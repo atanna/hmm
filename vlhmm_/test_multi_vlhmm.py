@@ -4,6 +4,7 @@ import numpy as np
 import pylab as plt
 from scipy.stats.mstats_basic import mquantiles
 from vlhmm_.context_tr_trie import ContextTransitionTrie
+from vlhmm_.emission import PoissonEmission
 from vlhmm_.poisson_hmm import PoissonHMM
 from vlhmm_.test_fb import create_img, data_to_file, sample_, go_vlhmm
 from vlhmm_.multi_vlhmm import MultiVLHMM
@@ -28,14 +29,14 @@ def main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=None,
                           _path="graphics/multi/sample/", **e_params):
     n = len(log_a)
     real_e_params = "unknown"
-    boards_parts = None
     if arr_data is None:
         if arr_T is None:
-            arr_T = [int(T/n_parts)]*n_parts
+            arr_T = [int(T/n_parts)] * n_parts
+        emission = PoissonEmission(n_states=n).set_rand_params()
         arr_data, emission = zip(
             *[sample_(T, n, list(map(int, ContextTransitionTrie
                                      .sample_(T, contexts, log_a))),
-                      type_emission=type_e, **e_params)
+                      emission=emission)
               for T in arr_T])
         emission = emission[0]
         T = sum(len(data) for data in arr_data)
@@ -53,10 +54,9 @@ def main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=None,
 
     with open("{}info.txt".format(path), "wt") as f:
         f.write("T={}\nstart={}\nmax_len={}\nth_prune={}\n"
-                "log_pr_thresh={}\nboards_parts={}\n"
+                "log_pr_thresh={}\narr_T={}\n"
                 .format(T, start, max_len, th_prune,
-                        log_pr_thresh, boards_parts))
-        f.write("T {}\n\n".format([len(d) for d in arr_data]))
+                        log_pr_thresh, arr_T))
         for d in arr_data:
             f.write("{}".format(d))
     T = [len(d) for d in arr_data]
@@ -163,16 +163,18 @@ def go_sample_test():
     #     [[0.9462,  0.5248,  1., 0.7132],
     #      [0.0538,  0.4752,  0., 0.2868]]))
     # arr_T = [51, 51, 61, 52, 65, 58, 69]
-    n_parts = 5
-    contexts = [""]
-    log_a = np.log(np.array(
-        [[0.4],
-         [0.6]]
-    ))
-    # contexts = ["00", "01", "1"]
-    # log_a = np.log(np.array([[0.7, 0.4, 0.2], [0.3, 0.6, 0.8]]
+    n_parts = 4
+    # contexts = [""]
+    # log_a = np.log(np.array(
+    #     [[0.4],
+    #      [0.6]]
     # ))
-    main_multi_vlhmm_test(contexts, log_a, T=int(4e2), arr_T=arr_T, max_len=2,
+    contexts = ["00", "01", "1"]
+    log_a = np.log(np.array(
+        [[0.7, 0.4, 0.2],
+         [0.3, 0.6, 0.8]]
+    ))
+    main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=arr_T, max_len=2,
                           max_log_p_diff=1.5,
                           n_parts=n_parts, th_prune=0.015, start="k-means",
                           show_e=False, alpha=alpha)

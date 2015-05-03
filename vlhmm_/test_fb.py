@@ -31,23 +31,26 @@ def get_mixture(n, n_components=3):
     return np.random.permutation(X)
 
 
-def sample_(size, n=2, h_states=None, type_emission="Poisson", **e_params):
+def sample_(size, n=2, h_states=None, type_emission="Poisson", emission=None, **e_params):
     if h_states is None:
         model_ = HMMModel.get_random_model(n, n)
         data, h_states = model_.sample(size)
         print("a", np.exp(model_.log_a))
 
-    if type_emission == "Poisson":
-        emission = PoissonEmission(n_states=n)
-        data = np.zeros(size)
-    else:
-        emission = GaussianEmission(n_states=n)
-        data = np.zeros((size, 2))
+    data = np.zeros(size)
 
-    if len(e_params) > 0:
-        emission._set_params(**e_params)
-    else:
-        emission.set_rand_params()
+    if emission is None:
+        if type_emission == "Poisson":
+            emission = PoissonEmission(n_states=n)
+            data = np.zeros(size)
+        else:
+            emission = GaussianEmission(n_states=n)
+            data = np.zeros((size, 2))
+
+        if len(e_params) > 0:
+            emission._set_params(**e_params)
+        else:
+            emission.set_rand_params()
 
     for i, state in enumerate(h_states):
         data[i] = emission.sample(state)
@@ -448,8 +451,18 @@ def go_main_fb_wang_test():
         [[0.8, 0.4, 0.3, 0.2, 0.9],
          [0.2, 0.6, 0.7, 0.8, 0.1]]
     ))
-    main_fb_wang_test(contexts, log_a, max_len=4, start="rand",
-                      type_e="Poisson", T=int(4e3), th_prune=0.01, show_e=True,
+    contexts = ["0", "1"]
+    log_a = np.log(np.array(
+        [[0.8, 0.4],
+         [0.2, 0.6]]
+    ))
+    contexts = [""]
+    log_a = np.log(np.array(
+        [[0.4],
+         [0.6]]
+    ))
+    main_fb_wang_test(contexts, log_a, max_len=2, start="k-means",
+                      type_e="Poisson", T=int(7e2), th_prune=0.01, show_e=True,
                       log_pr_thresh=0.01)
 
 
