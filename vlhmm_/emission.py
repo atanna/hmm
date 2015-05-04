@@ -193,6 +193,9 @@ class PoissonEmission(Emission):
             order = self.get_order()
         return "$\\lambda$ = {}".format(np.round(self.alpha[order], 1))
 
+    def get_log_b(self, data):
+        return np.array([poisson.logpmf(data, alph) for alph in self.alpha]).T[0]
+
     def log_p(self, y, state):
         return poisson.logpmf(y, self.alpha[state])
 

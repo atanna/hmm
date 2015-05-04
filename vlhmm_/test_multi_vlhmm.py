@@ -174,14 +174,14 @@ def go_sample_test():
         [[0.7, 0.4, 0.2],
          [0.3, 0.6, 0.8]]
     ))
-    main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=arr_T, max_len=2,
+    main_multi_vlhmm_test(contexts, log_a, T=int(2e3), arr_T=arr_T, max_len=2,
                           max_log_p_diff=1.5,
                           n_parts=n_parts, th_prune=0.015, start="k-means",
                           show_e=False, alpha=alpha)
 
 
 def go_real_test():
-    for chr_i in range(1, 22):
+    for chr_i in range(1, 2):
         bin_size = 200
         max_len = 4
         thr = 30
@@ -193,7 +193,7 @@ def go_real_test():
                       _path="graphics4/multi/real/chr_{}/bin_size_{}/min_len_seq_{}".format(
                           chr_i, bin_size, thr),
                       max_len=max_len, start="rand", max_log_p_diff=1.5,
-                      th_prune=0.015)
+                      th_prune=0.008)
         except Exception:
             continue
 

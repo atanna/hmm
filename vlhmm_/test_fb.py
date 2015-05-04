@@ -427,42 +427,42 @@ def go_main_fb_wang_test():
          [0.2, 0.6]]
     ))
 
-    # contexts = ["00", "01", "1"]
-    # log_a = np.log(np.array(
-    #     [[0.7, 0.4, 0.2],
-    #      [0.3, 0.6, 0.8]]
-    # ))
+    contexts = ["00", "01", "1"]
+    log_a = np.log(np.array(
+        [[0.7, 0.4, 0.2],
+         [0.3, 0.6, 0.8]]
+    ))
     # contexts = [""]
     # log_a = np.log(np.array(
     #     [[0.4],
     #      [0.6]]
     # ))
 
-    contexts = ["000", "0010", "0011", "01", "1"]
-    log_a = np.log(np.array([
-        [0.9, 0.2, 0.65, 0.3, 0.9],
-        [0.1, 0.8, 0.35, 0.7, 0.1]
-    ]
-    ))
-
-
-    contexts = ["00", "01", "10", "110", "111"]
-    log_a = np.log(np.array(
-        [[0.8, 0.4, 0.3, 0.2, 0.9],
-         [0.2, 0.6, 0.7, 0.8, 0.1]]
-    ))
-    contexts = ["0", "1"]
-    log_a = np.log(np.array(
-        [[0.8, 0.4],
-         [0.2, 0.6]]
-    ))
-    contexts = [""]
-    log_a = np.log(np.array(
-        [[0.4],
-         [0.6]]
-    ))
-    main_fb_wang_test(contexts, log_a, max_len=2, start="k-means",
-                      type_e="Poisson", T=int(7e2), th_prune=0.01, show_e=True,
+    # contexts = ["000", "0010", "0011", "01", "1"]
+    # log_a = np.log(np.array([
+    #     [0.9, 0.2, 0.65, 0.3, 0.9],
+    #     [0.1, 0.8, 0.35, 0.7, 0.1]
+    # ]
+    # ))
+    #
+    #
+    # contexts = ["00", "01", "10", "110", "111"]
+    # log_a = np.log(np.array(
+    #     [[0.8, 0.4, 0.3, 0.2, 0.9],
+    #      [0.2, 0.6, 0.7, 0.8, 0.1]]
+    # ))
+    # contexts = ["0", "1"]
+    # log_a = np.log(np.array(
+    #     [[0.8, 0.4],
+    #      [0.2, 0.6]]
+    # ))
+    # contexts = [""]
+    # log_a = np.log(np.array(
+    #     [[0.4],
+    #      [0.6]]
+    # ))
+    main_fb_wang_test(contexts, log_a, max_len=3, start="k-means",
+                      type_e="Poisson", T=int(1e3), th_prune=0.01, show_e=True,
                       log_pr_thresh=0.01)
 
 

@@ -2,7 +2,7 @@ import numpy as np
 from joblib import Parallel, delayed
 from collections import defaultdict
 from scipy.misc import logsumexp
-from vlhmm_.forward_backward import VLHMMWang
+from vlhmm_.forward_backward import VLHMMWang, _vlhmmc
 
 
 class OneOfManyVLHMM(VLHMMWang):
@@ -26,18 +26,15 @@ class OneOfManyVLHMM(VLHMMWang):
         self.update_contexts()
 
     def count_ksi(self):
-        self.log_ksi[:] = np.log(0.)
-        for t in range(self.T - 1):
-            for i in range(self.n_contexts):
-                for q in range(self.n):
-                    self._update_ksi(t, q, i)
-        self.log_ksi -= \
-            logsumexp(self.log_ksi, axis=(1, 2)).reshape((self.T, 1, 1))
+        _vlhmmc._log_ksi(self.contexts, self.log_a, self.log_b, self.tr_trie,
+                         self.id_c, self.state_c, self.log_alpha,
+                         self.log_beta, self.log_ksi)
         return logsumexp(self.log_ksi[:-1], axis=0)
 
     def update_contexts(self):
         self.n_contexts = self.parent.n_contexts
         self.log_a = self.parent.log_a
+        self.log_b = self.emission.get_log_b(self.data)
         self.contexts = self.parent.contexts
         self.log_context_p = self.parent.log_context_p
         self.state_c = self.parent.state_c
@@ -73,7 +70,9 @@ class MultiVLHMM(VLHMMWang):
             *Parallel(n_jobs=1)(
                 delayed(vlhmm._e_step)()
                 for vlhmm in self.vlhmms))
+        # log_gamma, log_p = zip(*[vlhmm._e_step() for vlhmm in self.vlhmms])
         self.log_gamma = np.concatenate(log_gamma)
+        print("log_gamma", self.log_gamma)
         self._log_p = np.sum(log_p)
 
         self.track_log_p[self.n_contexts].append(self._log_p)
@@ -81,10 +80,13 @@ class MultiVLHMM(VLHMMWang):
         self._check_diff_log_p()
 
     def _m_step(self):
-        arr_sum_ksi = Parallel(n_jobs=-1)(
+        arr_sum_ksi = Parallel(n_jobs=1)(
             delayed(vlhmm.count_ksi)()
             for vlhmm in self.vlhmms)
+        # arr_sum_ksi = [vlhmm.count_ksi() for vlhmm in self.vlhmms]
+        print("arr_sum_ksi",arr_sum_ksi)
         self.sum_ksi = logsumexp(arr_sum_ksi, axis=0)
+        print("sum_ksi",self.sum_ksi)
         super()._m_step()
 
     def update_tr_params(self):
@@ -102,9 +104,6 @@ class MultiVLHMM(VLHMMWang):
 
     def _prune(self, th_prune):
         res = super()._prune(th_prune)
-        # Parallel(n_jobs=1)(
-        #     delayed(vlhmm.update_contexts)()
-        #     for vlhmm in self.vlhmms)
         for vlhmm in self.vlhmms:
             vlhmm.update_contexts()
         return res

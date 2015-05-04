@@ -8,6 +8,7 @@ from scipy.misc import logsumexp
 from scipy.stats.mstats import mquantiles
 from vlhmm_.context_tr_trie import ContextTransitionTrie
 from vlhmm_.emission import GaussianEmission, PoissonEmission
+import vlhmm_._vlhmmc as _vlhmmc
 
 
 class AbstractForwardBackward():
@@ -44,6 +45,7 @@ class AbstractForwardBackward():
             self.emission = GaussianEmission(self.data, self.X, self.n)
             print("init_mu = {}..\ninit_sigma = {}..\n".format(
                 self.emission.mu, self.emission.sigma))
+        self.log_b = self.emission.get_log_b(self.data)
 
     def _prepare_to_fitting(self, data, X=None, start="k-means", type_emission="Poisson", max_log_p_diff=1.5, **kwargs):
         self.start = start
@@ -75,6 +77,7 @@ class AbstractForwardBackward():
         self.log_forward()
         self.log_backward()
         self._log_gamma()
+        self._log_ksi()
 
     def _m_step(self):
         self.update_tr_params()
@@ -126,11 +129,15 @@ class AbstractForwardBackward():
         self.log_gamma = self.log_alpha + self.log_beta
         self.log_gamma -= logsumexp(self.log_gamma, axis=1)[:, np.newaxis]
 
+    def _log_ksi(self):
+        pass
+
     def _normalise_a(self):
         self.log_a = self.log_a - logsumexp(self.log_a, axis=0)
 
     def update_emission_params(self):
         self.emission.update_params(self.log_gamma)
+        self.log_b = self.emission.get_log_b(self.data)
 
     def update_tr_params(self):
         self.log_ksi[:] = np.log(0.)
@@ -326,38 +333,15 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
             [int(self.contexts[i][0]) for i in range(self.n_contexts)],
             [self.state_c[i] for i in range(self.n_contexts)])
 
-    def _update_first_alpha(self, i):
-        t = 0
-        self.log_alpha[t][i] = \
-            self.log_context_p[i] + \
-            self.emission.log_p(self.data[t], self.state_c[i])
+    def log_forward(self):
+        _vlhmmc._log_forward(self.contexts, self.log_a, self.log_b, self.log_context_p,
+                          self.tr_trie, self.id_c, self.state_c, self.log_alpha)
+        self._log_p = logsumexp(self.log_alpha[-1])
+        self.track_log_p[self.n_contexts].append(self._log_p)
 
-    def _update_next_alpha(self, t, i):
-        self.log_alpha[t + 1][i] = np.log(0.)
-        c = self.contexts[i]
-        for c_ in self.tr_trie.get_list_c(c[1:]):
-            i_ = self.id_c[c_]
-            log_transition = self.log_a[self.state_c[i], i_]
-            if len(c_) > t:
-                log_transition = self.tr_trie.log_tr_p(c[0], c_[:t+1])
-
-            self.log_alpha[t + 1][i] = np.logaddexp(
-                self.log_alpha[t + 1][i],
-                self.log_alpha[t][i_]
-                + log_transition
-                + self.emission.log_p(self.data[t + 1], self.state_c[i]))
-    
-    def _update_beta(self, t, i):
-        self.log_beta[t][i] = np.log(0.)
-        c = self.contexts[i]
-        for q in range(self.n):
-            for c_ in self.tr_trie.get_list_c(str(q) + c):
-                i_ = self.id_c[c_]
-                self.log_beta[t][i] = np.logaddexp(
-                    self.log_beta[t][i],
-                    self.log_a[q, i]
-                    + self.emission.log_p(self.data[t + 1], q)
-                    + self.log_beta[t + 1][i_])
+    def log_backward(self):
+        _vlhmmc._log_backward(self.contexts, self.log_a, self.log_b,
+                             self.tr_trie, self.id_c, self.state_c, self.log_beta)
 
     # def _log_gamma(self):
     #     super()._log_gamma()
@@ -365,28 +349,25 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     #     self.log_context_p -= logsumexp(self.log_context_p)
     #     print("c_p = {}".format(np.round(np.exp(self.log_context_p),2)))
 
-    def _update_ksi(self, t, q, i):
-        self.log_ksi[t][q, i] = np.log(0.)
-        for c_ in self.get_list_c(q, self.contexts[i]):
-            i_ = self.id_c[c_]
-            self.log_ksi[t][q, i] = \
-                np.logaddexp(self.log_ksi[t][q, i],
-                             self.log_alpha[t][i] +
-                             self.log_a[q, i] +
-                             self.emission.log_p(self.data[t+1], q) +
-                             self.log_beta[t+1, i_])
+    def _log_ksi(self):
+        _vlhmmc._log_ksi(self.contexts, self.log_a, self.log_b, self.tr_trie,
+                         self.id_c, self.state_c, self.log_alpha,
+                         self.log_beta, self.log_ksi)
 
     def update_tr_params(self):
-        # print("alpha: \n", np.round(np.exp(self.log_alpha[:5]),2))
-        # print("beta \n", np.round(np.exp(self.log_beta[:5]),2))
-        # print("gamma \n", np.round(np.exp(self.log_gamma[:]),3))
-        print("p_state ", np.round(np.exp(logsumexp(self.log_gamma, axis=0)), 4))
         self.log_context_p = logsumexp(self.log_gamma, axis=0)
         self.log_context_p -= logsumexp(self.log_context_p)
-        print("c_p = {}".format(np.round(np.exp(self.log_context_p), 2)))
-        super().update_tr_params()
+        log_a = logsumexp(self.log_ksi[:-1], axis=0) -\
+                logsumexp(self.log_gamma, axis=0)
+        log_a -= logsumexp(log_a, axis=0)
+        self.log_a = log_a
+        self._check_diff_log_p()
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
+
+        print("p_state ", np.round(np.exp(logsumexp(self.log_gamma, axis=0)), 4))
+        print("c_p = {}".format(np.round(np.exp(self.log_context_p), 2)))
+        print("a:\n{}".format(np.round(np.exp(self.log_a),4)))
 
     def _get_log_gamma_emission(self):
         log_gamma_ = np.log(np.zeros((self.T, self.n)))
@@ -398,12 +379,36 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
 
     def update_emission_params(self):
         self.emission.update_params(self._get_log_gamma_emission())
+        self.log_b = self.emission.get_log_b(self.data)
 
     def get_n_params(self):
         return self.n_contexts*(1+self.n) + self.emission.get_n_params()
 
     def get_aic(self):
         return 2*(self.get_n_params() - self._log_p)
+
+    def estimate_fdr(self, threshold):
+        """
+        H0 - state 0
+        H1 - state != 0
+        :return:
+        """
+        for i, c in enumerate(self.contexts):
+            if not c[i].startwith('0'):
+                break
+        log_expectation_fp = np.log(0.)
+        expectation_p = 0.
+        for t in self.T:
+            log_p_0 = logsumexp(self.log_gamma[t][:i])
+            log_p_1 = logsumexp(self.log_gamma[t][i:])
+            log_sum = np.logaddexp(log_p_0, log_p_1)
+            log_p_0, log_p_1 = log_p_0-log_sum, log_p_1-log_sum
+            if np.exp(log_p_0) < threshold:
+                expectation_p += 1
+                log_expectation_fp = np.logaddexp(log_expectation_fp, log_p_0)
+
+        return np.exp(log_expectation_fp) / expectation_p
+
 
     @staticmethod
     def _get_context_order(contexts, state_order):
