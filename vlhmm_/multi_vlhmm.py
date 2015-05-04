@@ -26,9 +26,6 @@ class OneOfManyVLHMM(VLHMMWang):
         self.update_contexts()
 
     def count_ksi(self):
-        _vlhmmc._log_ksi(self.contexts, self.log_a, self.log_b, self.tr_trie,
-                         self.id_c, self.state_c, self.log_alpha,
-                         self.log_beta, self.log_ksi)
         return logsumexp(self.log_ksi[:-1], axis=0)
 
     def update_contexts(self):
@@ -45,7 +42,7 @@ class OneOfManyVLHMM(VLHMMWang):
     def _e_step(self):
         # raise NameError("e_step")
         super()._e_step()
-        return self.log_gamma, self._log_p
+        return self.log_gamma, self._log_p, self.count_ksi()
 
 
 class MultiVLHMM(VLHMMWang):
@@ -66,28 +63,18 @@ class MultiVLHMM(VLHMMWang):
             self.vlhmms.append(OneOfManyVLHMM(self, data, i))
 
     def _e_step(self):
-        log_gamma, log_p = zip(
-            *Parallel(n_jobs=1)(
+        log_gamma, log_p, log_sum_ksi = zip(
+            *Parallel(n_jobs=-1)(
                 delayed(vlhmm._e_step)()
                 for vlhmm in self.vlhmms))
-        # log_gamma, log_p = zip(*[vlhmm._e_step() for vlhmm in self.vlhmms])
+        # log_gamma, log_p, log_sum_ksi =
+        # zip(*[vlhmm._e_step() for vlhmm in self.vlhmms])
         self.log_gamma = np.concatenate(log_gamma)
         print("log_gamma", self.log_gamma)
         self._log_p = np.sum(log_p)
-
         self.track_log_p[self.n_contexts].append(self._log_p)
-
         self._check_diff_log_p()
-
-    def _m_step(self):
-        arr_sum_ksi = Parallel(n_jobs=1)(
-            delayed(vlhmm.count_ksi)()
-            for vlhmm in self.vlhmms)
-        # arr_sum_ksi = [vlhmm.count_ksi() for vlhmm in self.vlhmms]
-        print("arr_sum_ksi",arr_sum_ksi)
-        self.sum_ksi = logsumexp(arr_sum_ksi, axis=0)
-        print("sum_ksi",self.sum_ksi)
-        super()._m_step()
+        self.sum_ksi = logsumexp(log_sum_ksi, axis=0)
 
     def update_tr_params(self):
         log_sum_gamma = logsumexp(self.log_gamma, axis=0)

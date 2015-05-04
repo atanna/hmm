@@ -174,9 +174,9 @@ def go_sample_test():
         [[0.7, 0.4, 0.2],
          [0.3, 0.6, 0.8]]
     ))
-    main_multi_vlhmm_test(contexts, log_a, T=int(2e3), arr_T=arr_T, max_len=2,
+    main_multi_vlhmm_test(contexts, log_a, T=int(2e4), arr_T=arr_T, max_len=3,
                           max_log_p_diff=1.5,
-                          n_parts=n_parts, th_prune=0.015, start="k-means",
+                          n_parts=n_parts, th_prune=0.01, start="k-means",
                           show_e=False, alpha=alpha)
 
 

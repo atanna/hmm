@@ -224,7 +224,7 @@ class AbstractVLHMM():
 class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def _init(self, data):
         if self.start == "defined" or self.start == "k-means":
-            print("X", self.X)
+            # print("X", self.X)
             self.tr_trie = ContextTransitionTrie(self.X, max_len=self.max_len,
                                                  n=self.n, start=self.start)
         else:
