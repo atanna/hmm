@@ -31,9 +31,9 @@ class OneOfManyVLHMM(VLHMMWang):
             for i in range(self.n_contexts):
                 for q in range(self.n):
                     self._update_ksi(t, q, i)
-        self.log_ksi -=  \
+        self.log_ksi -= \
             logsumexp(self.log_ksi, axis=(1, 2)).reshape((self.T, 1, 1))
-        self._sum_ksi = logsumexp(self.log_ksi[:-1], axis=0)
+        return logsumexp(self.log_ksi[:-1], axis=0)
 
     def update_contexts(self):
         self.n_contexts = self.parent.n_contexts
@@ -48,6 +48,7 @@ class OneOfManyVLHMM(VLHMMWang):
     def _e_step(self):
         # raise NameError("e_step")
         super()._e_step()
+        return self.log_gamma, self._log_p
 
 
 class MultiVLHMM(VLHMMWang):
@@ -68,36 +69,29 @@ class MultiVLHMM(VLHMMWang):
             self.vlhmms.append(OneOfManyVLHMM(self, data, i))
 
     def _e_step(self):
-        self._log_p = np.log(1.)
-        t = 0
-        print("e")
-        Parallel(n_jobs=1)(
-            delayed(vlhmm._e_step)()
-            for vlhmm in self.vlhmms)
+        log_gamma, log_p = zip(
+            *Parallel(n_jobs=1)(
+                delayed(vlhmm._e_step)()
+                for vlhmm in self.vlhmms))
+        self.log_gamma = np.concatenate(log_gamma)
+        self._log_p = np.sum(log_p)
 
-        for vlhmm in self.vlhmms:
-            T = vlhmm.T
-            # vlhmm._e_step()
-            self.log_gamma[t: t+T] = vlhmm.log_gamma
-            self._log_p = self._log_p + vlhmm._log_p
-            t += T
         self.track_log_p[self.n_contexts].append(self._log_p)
 
         self._check_diff_log_p()
 
     def _m_step(self):
-        for vlhmm in self.vlhmms:
-            vlhmm.count_ksi()
+        arr_sum_ksi = Parallel(n_jobs=-1)(
+            delayed(vlhmm.count_ksi)()
+            for vlhmm in self.vlhmms)
+        self.sum_ksi = logsumexp(arr_sum_ksi, axis=0)
         super()._m_step()
 
     def update_tr_params(self):
-        self.log_context_p[:] = logsumexp(self.log_gamma, axis=0)
+        log_sum_gamma = logsumexp(self.log_gamma, axis=0)
+        self.log_context_p[:] = log_sum_gamma
         self.log_context_p -= logsumexp(self.log_context_p)
-
-        log_a = np.log(np.zeros((self.n, self.n_contexts)))
-        for vlhmm in self.vlhmms:
-            log_a = np.logaddexp(log_a, vlhmm._sum_ksi)
-        log_a -= logsumexp(self.log_gamma, axis=0)
+        log_a = self.sum_ksi - log_sum_gamma
         self.log_a[:] = log_a - logsumexp(log_a, axis=0)
 
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
@@ -108,6 +102,9 @@ class MultiVLHMM(VLHMMWang):
 
     def _prune(self, th_prune):
         res = super()._prune(th_prune)
+        # Parallel(n_jobs=1)(
+        #     delayed(vlhmm.update_contexts)()
+        #     for vlhmm in self.vlhmms)
         for vlhmm in self.vlhmms:
             vlhmm.update_contexts()
         return res
