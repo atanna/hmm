@@ -237,6 +237,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.n_contexts = self.tr_trie.n_contexts
         self.id_c = dict(zip(self.contexts, range(self.n_contexts)))
         self.log_context_p = np.log(np.ones(self.n_contexts) / self.n_contexts)
+        self.info = []
 
         super()._init(data)
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
@@ -282,6 +283,12 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         return self
 
     def _prune(self, th_prune):
+        self.info.append("{} {}\nc_p: {}\na: {}\n{}\nlog_p: {}\naic: {}\n\n"\
+            .format(self.n_contexts, self.contexts,
+                    np.round(np.exp(self.log_context_p), 3),
+                    np.round(np.exp(self.log_a), 2),
+                    self.emission.get_str_params(),
+                    self._log_p, self.get_aic()))
         self.track_e_params[self.n_contexts] = self.emission.get_str_params()
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
@@ -382,7 +389,11 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.log_b = self.emission.get_log_b(self.data)
 
     def get_n_params(self):
-        return self.n_contexts*(1+self.n) + self.emission.get_n_params()
+        n_params = self.n_contexts + self.n_contexts*(self.n-1) + \
+                   self.emission.get_n_params() + (self.n_contexts-1)
+        # contexts, transition params,
+        # emission params, start distribution (pi=log_context_p)
+        return n_params
 
     def get_aic(self):
         return 2*(self.get_n_params() - self._log_p)

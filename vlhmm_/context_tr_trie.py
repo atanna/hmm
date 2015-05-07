@@ -22,6 +22,9 @@ class ContextTransitionTrie():
         self.n = n
         self._max_len = max_len
         self.alphabet = "".join(list(map(str, range(self.n))))
+        self.log_c_tr_trie = datrie.Trie(self.alphabet)
+        self._log_tr_trie = datrie.Trie(self.alphabet)
+        self.contexts = datrie.Trie(self.alphabet)
         self._init_seq_contexts()
 
         if data is None:
@@ -142,7 +145,7 @@ class ContextTransitionTrie():
         res = np.log(0.)
         for w, log_p in self.log_c_tr_trie.items(s):
             if log_p != -np.inf:
-                res = np.logaddexp(res, log_p+self.contexts[w[1:]])
+                res = np.logaddexp(res, log_p + self.contexts[w[1:]])
         return res
 
     def log_tr_p(self, q, s):
@@ -203,7 +206,7 @@ class ContextTransitionTrie():
         recount transition probability on all substrings of contexts
         :return:
         """
-        self._log_tr_trie = datrie.Trie(self.alphabet)
+        self._log_tr_trie.clear()
 
     def recount_c_tr_trie(self):
         """
@@ -235,14 +238,14 @@ class ContextTransitionTrie():
         recount transition probability using matrix of probability
         :return:
         """
-        self.log_c_tr_trie = datrie.Trie(self.alphabet)
+        self.log_c_tr_trie.clear()
         self.seq_contexts = seq_contexts
         self.n_contexts = len(seq_contexts)
         self._max_len = max(list(map(len, self.seq_contexts)))
         for i, c in enumerate(seq_contexts):
             for q in self.alphabet:
                 self.log_c_tr_trie[q + c] = log_a[q, i]
-        self.contexts = datrie.Trie(self.alphabet)
+        self.contexts.clear()
         if log_c_p is None:
             log_c_p = np.log(np.ones(self.n_contexts)/self.n_contexts)
         for i, c in enumerate(seq_contexts):
@@ -317,7 +320,8 @@ class ContextTransitionTrie():
             c = s[1:]
             _, log_c_p = zip(*self.contexts.items(c))
             contexts[c] = logsumexp(log_c_p)
-        self.contexts = contexts
+        self.contexts.clear()
+        self.contexts.update(contexts)
         self._upd_c()
         self.recount_tr_trie()
         return n_prune > 0
@@ -328,7 +332,10 @@ class ContextTransitionTrie():
             sum += self.tr_p(q, s+q_)\
                    * (self.log_tr_p(q, s+q_)-self.log_tr_p(q, s))
         _, log_c_p = zip(*self.contexts.items(s))
-        return np.exp(logsumexp(log_c_p)) * sum
+        w = np.exp(logsumexp(log_c_p))
+        if len(s) == 1:
+            w = 1./self.n
+        return w * sum
 
     def draw(self, fname=None):
         return self.draw_context_trie(self.seq_contexts,

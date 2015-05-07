@@ -76,7 +76,7 @@ def main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=None,
 
 
 def get_real_data(chr_i=1, bin_size=400, thr=10):
-    data = np.genfromtxt("../resources/chr{}_{}.txt".format(chr_i, bin_size))
+    data = np.genfromtxt("resources/chr{}_{}.txt".format(chr_i, bin_size))
     arr_data = []
     t_start, t_fin = 0, 1
     for i, x in enumerate(data):
@@ -90,7 +90,7 @@ def get_real_data(chr_i=1, bin_size=400, thr=10):
 
 def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
               type_e="Poisson", start="k-means", n=2,
-              _path="graphics/multi/real/", **kwargs):
+              _path="graphics/multi/real/", write_data=True, comp_with_hmm=True, **kwargs):
     def go(vlhmm):
         name = path
         vlhmm.fit(arr_data, max_len=max_len, start=start, th_prune=th_prune,
@@ -99,15 +99,26 @@ def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
         print("T=", T, "max_len=", max_len)
         print(vlhmm.emission.get_str_params())
         print(path)
-
+        print("aic:", vlhmm.get_aic())
         create_img(vlhmm, name=name)
         with open("{}info.txt".format(path), "a") as f:
-            f.write("\nemission: {}\n".format(vlhmm.emission.get_str_params()))
-            f.write("contexts: {}\n".format(vlhmm.contexts))
-            f.write("a: {}\n".format(np.round(np.exp(vlhmm.log_a), 4)))
-            f.write("log_c_p: {}\n".format(vlhmm.log_context_p))
-            f.write("c_p: {}\n".format(np.exp(vlhmm.log_context_p)))
-            # plt.show()
+            # f.write("\nemission: {}\n".format(vlhmm.emission.get_str_params()))
+            # f.write("contexts: {}\n".format(vlhmm.contexts))
+            # f.write("a: {}\n".format(np.round(np.exp(vlhmm.log_a), 4)))
+            # f.write("log_c_p: {}\n".format(vlhmm.log_tcontext_p))
+            # f.write("c_p: {}\n\n".format(np.exp(vlhmm.log_context_p)))
+            for info in vlhmm.info:
+                f.write("{}\n".format(info))
+
+        print(comp_with_hmm)
+        if comp_with_hmm:
+            logprob = poisson_hmm(arr_data, _path=path)
+            with open("{}info.txt".format(path), "a") as f:
+                f.write("lgprob:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm._log_p, logprob[-1], vlhmm._log_p-logprob[-1]))
+                hmm_n_params = n*(n-1) + n + (n-1)
+                hmm_aic = 2*(hmm_n_params-logprob[-1])
+                f.write("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
+                f.write("aic:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
 
     path = "{}/{}_{}_{}/".format(_path, max_len, start, random.randrange(1e3))
     print(start)
@@ -120,9 +131,13 @@ def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
                 .format(T, start, max_len, th_prune, log_pr_thresh))
         f.write(
             "T {} {}\n\n".format(len(arr_data), [len(d) for d in arr_data]))
-        if len(arr_data) < 100:
+        if write_data:
             for i, d in enumerate(arr_data):
                 f.write("{}:\n{}\n".format(i, d))
+                if i > 10:
+                    f.write("...\n")
+                    break
+        f.write("\n\n")
 
     go(MultiVLHMM(n))
 
@@ -163,7 +178,7 @@ def go_sample_test():
     #     [[0.9462,  0.5248,  1., 0.7132],
     #      [0.0538,  0.4752,  0., 0.2868]]))
     # arr_T = [51, 51, 61, 52, 65, 58, 69]
-    n_parts = 4
+    n_parts = 1000
     # contexts = [""]
     # log_a = np.log(np.array(
     #     [[0.4],
@@ -174,17 +189,23 @@ def go_sample_test():
         [[0.7, 0.4, 0.2],
          [0.3, 0.6, 0.8]]
     ))
-    main_multi_vlhmm_test(contexts, log_a, T=int(2e4), arr_T=arr_T, max_len=3,
+    main_multi_vlhmm_test(contexts, log_a, T=int(3e3), arr_T=arr_T, max_len=2,
                           max_log_p_diff=1.5,
                           n_parts=n_parts, th_prune=0.01, start="k-means",
                           show_e=False, alpha=alpha)
 
 
 def go_real_test():
-    for chr_i in range(1, 2):
+    for chr_i in range(4, 5):
         bin_size = 200
         max_len = 4
-        thr = 30
+
+        max_len = 3
+        thr = 15
+        # thr = 20
+        # thr = 15
+        # thr = 15
+        # thr = 40
 
         arr_data = get_real_data(chr_i, bin_size, thr=thr)
         print(len(arr_data))
@@ -192,8 +213,8 @@ def go_real_test():
             real_test(arr_data,
                       _path="graphics4/multi/real/chr_{}/bin_size_{}/min_len_seq_{}".format(
                           chr_i, bin_size, thr),
-                      max_len=max_len, start="rand", max_log_p_diff=1.5,
-                      th_prune=0.008)
+                      max_len=max_len, start="k-means", max_log_p_diff=1.5,
+                      th_prune=0.004)
         except Exception:
             continue
 
@@ -203,5 +224,5 @@ def go_real_test():
 
 
 if __name__ == "__main__":
-    go_sample_test()
-    # go_real_test()
+    # go_sample_test()
+    go_real_test()

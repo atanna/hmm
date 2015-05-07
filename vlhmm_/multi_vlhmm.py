@@ -2,7 +2,7 @@ import numpy as np
 from joblib import Parallel, delayed
 from collections import defaultdict
 from scipy.misc import logsumexp
-from vlhmm_.forward_backward import VLHMMWang, _vlhmmc
+from vlhmm_.forward_backward import VLHMMWang
 
 
 class OneOfManyVLHMM(VLHMMWang):

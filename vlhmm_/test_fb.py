@@ -8,6 +8,8 @@ from sklearn.hmm import GaussianHMM
 from vlhmm_.context_tr_trie import ContextTransitionTrie
 from hmm_.hmm import HMMModel, HMM
 from vlhmm_.emission import GaussianEmission, PoissonEmission
+# import vlhmm_.test_multi_vlhmm.poisson_hmm as poisson_hmm
+from vlhmm_.poisson_hmm import PoissonHMM
 
 
 def data_to_file(data, f_name):
@@ -103,6 +105,18 @@ def test_wang_with_hmm_sample():
 
     sk_log_p = test_sklearn(data, n)
     go(fb.VLHMMWang(n))
+
+def poisson_hmm(arr_data, _path, text=""):
+    hmm = PoissonHMM(n_components=2)
+    logprob, _ = hmm.fit(arr_data)
+    with open(_path + "PoissonHMM.txt", "wt") as f:
+        f.write("a {}\n\n".format(hmm.transmat_))
+        f.write("log_a {}\n\n".format(hmm._log_transmat))
+        f.write("lambda: {}\n\n".format(hmm.rates_))
+        f.write("\nn_data={}\n".format(len(arr_data)))
+        f.write("{}".format(text))
+    print()
+    return
 
 
 def test_hmm(type_e="Poisson", T=int(2e3), start="k-means"):
@@ -218,7 +232,7 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
 
 
 def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
-             real_e_params="unknown", max_len=4, **kwargs):
+             real_e_params="unknown", max_len=4, comp_with_hmm=True, **kwargs):
     print(path)
     vlhmm.fit(data, max_len=max_len, **kwargs)
     if T is None:
@@ -234,16 +248,24 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
                                                  vlhmm.start, comp_emission)
     fig = create_img(vlhmm, contexts, log_a, path, text)
     fig.savefig(path+'main')
-    plt.show()
+    # plt.show()
     with open("{}info.txt".format(path), "a") as f:
             f.write("\n\n")
             f.write("T={}  max_len={}\n".format(T, max_len))
             f.write("{}\n".format(kwargs))
-            f.write("emission: {}\n".format(vlhmm.emission.get_str_params()))
-            f.write("contexts: {}\n".format(vlhmm.contexts))
-            f.write("a: {}\n".format(np.round(np.exp(vlhmm.log_a), 4)))
-            f.write("log_c_p: {}\n".format(vlhmm.log_context_p))
-            f.write("c_p: {}\n".format(np.exp(vlhmm.log_context_p)))
+            for info in vlhmm.info:
+                f.write("{}\n".format(info))
+    n = len(log_a)
+    if comp_with_hmm:
+            logprob = poisson_hmm([data], _path=path)
+            with open("{}info.txt".format(path), "a") as f:
+                f.write("lgprob:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm._log_p, logprob[-1], vlhmm._log_p-logprob[-1]))
+                hmm_n_params = n*(n-1) + n + (n-1)
+                hmm_aic = 2*(hmm_n_params-logprob[-1])
+                f.write("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
+                f.write("aic:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
+
+
 
 
 def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
@@ -462,7 +484,7 @@ def go_main_fb_wang_test():
     #      [0.6]]
     # ))
     main_fb_wang_test(contexts, log_a, max_len=3, start="k-means",
-                      type_e="Poisson", T=int(1e3), th_prune=0.01, show_e=True,
+                      type_e="Poisson", T=int(1e3), th_prune=0.01, show_e=False,
                       log_pr_thresh=0.01)
 
 
