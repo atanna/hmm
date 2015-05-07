@@ -62,17 +62,11 @@ def main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=None,
     T = [len(d) for d in arr_data]
 
     vlhmm = MultiVLHMM(n)
-    go_vlhmm(vlhmm, arr_data, contexts, log_a, path=path, T=T,
+    go_vlhmm(vlhmm, list(arr_data), contexts, log_a, path=path, T=T,
              real_e_params=real_e_params, max_len=max_len, start=start,
              th_prune=th_prune,
              log_pr_thresh=log_pr_thresh, type_emission=type_e,
              max_log_p_diff=max_log_p_diff)
-    logprob = poisson_hmm(arr_data, _path="{}poisson_hmm.txt".format(path))
-    print("lgprob:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm._log_p, logprob[-1], vlhmm._log_p-logprob[-1]))
-    hmm_n_params = 2*(1+n)+n
-    hmm_aic = 2*(hmm_n_params-logprob[-1])
-    print("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
-    print("aic:\nvlhmm = {},  hmm = {}   diff= {}".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
 
 
 def get_real_data(chr_i=1, bin_size=400, thr=10):
@@ -178,7 +172,7 @@ def go_sample_test():
     #     [[0.9462,  0.5248,  1., 0.7132],
     #      [0.0538,  0.4752,  0., 0.2868]]))
     # arr_T = [51, 51, 61, 52, 65, 58, 69]
-    n_parts = 1000
+    n_parts = 5
     # contexts = [""]
     # log_a = np.log(np.array(
     #     [[0.4],
@@ -189,9 +183,9 @@ def go_sample_test():
         [[0.7, 0.4, 0.2],
          [0.3, 0.6, 0.8]]
     ))
-    main_multi_vlhmm_test(contexts, log_a, T=int(3e3), arr_T=arr_T, max_len=2,
+    main_multi_vlhmm_test(contexts, log_a, T=int(4e3), arr_T=arr_T, max_len=4,
                           max_log_p_diff=1.5,
-                          n_parts=n_parts, th_prune=0.01, start="k-means",
+                          n_parts=n_parts, th_prune=0.01, start="rand",
                           show_e=False, alpha=alpha)
 
 
@@ -200,12 +194,12 @@ def go_real_test():
         bin_size = 200
         max_len = 4
 
-        max_len = 3
+        max_len = 4
         thr = 15
         # thr = 20
         # thr = 15
         # thr = 15
-        # thr = 40
+        thr = 45
 
         arr_data = get_real_data(chr_i, bin_size, thr=thr)
         print(len(arr_data))

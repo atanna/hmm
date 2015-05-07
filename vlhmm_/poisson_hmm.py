@@ -1,7 +1,7 @@
 import numpy as np
-from hmmlearn.base import _BaseHMM
 from scipy.stats import poisson
 from sklearn import cluster, metrics
+from vlhmm_.base_hmm import _BaseHMM
 
 
 class PoissonHMM(_BaseHMM):

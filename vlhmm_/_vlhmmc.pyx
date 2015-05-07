@@ -8,7 +8,7 @@ def _log_forward(list contexts,
                  np.ndarray[np.float64_t, ndim=1] log_context_p,
                  tr_trie,
                  dict id_c,
-                 np.ndarray[np.long_t, ndim=1] state_c,
+                 np.ndarray[np.uint8_t, ndim=1] state_c,
                  np.ndarray[np.float64_t, ndim=2] log_alpha):
         log_alpha[:] = -np.inf
         cdef int n_contexts = len(log_context_p)
@@ -42,9 +42,9 @@ def _log_backward(list contexts,
                   np.ndarray[np.float64_t, ndim=2] log_b,
                   tr_trie,
                   dict id_c,
-                  np.ndarray[np.long_t, ndim=1] state_c,
+                  np.ndarray[np.uint8_t, ndim=1] state_c,
                   np.ndarray [np.float64_t, ndim=2] log_beta):
-    log_beta[:] = np.log(0.)
+    log_beta.fill(np.log(0.))
     log_beta[-1] = np.log(1.)
     cdef int T = len(log_b)
     cdef int n = log_a.shape[0]
@@ -70,11 +70,11 @@ def _log_ksi(list contexts,
              np.ndarray[np.float64_t, ndim=2] log_b,
              tr_trie,
              dict id_c,
-             np.ndarray[np.long_t, ndim=1] state_c,
+             np.ndarray[np.uint8_t, ndim=1] state_c,
              np.ndarray[np.float64_t, ndim=2] log_alpha,
              np.ndarray[np.float64_t, ndim=2] log_beta,
              np.ndarray[np.float64_t, ndim=3] log_ksi):
-    log_ksi[:] = np.log(0.)
+    log_ksi.fill(np.log(0.))
     cdef int T = len(log_b)
     cdef int n = log_a.shape[0]
     cdef int n_contexts = log_a.shape[1]

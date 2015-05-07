@@ -116,7 +116,7 @@ def poisson_hmm(arr_data, _path, text=""):
         f.write("\nn_data={}\n".format(len(arr_data)))
         f.write("{}".format(text))
     print()
-    return
+    return logprob
 
 
 def test_hmm(type_e="Poisson", T=int(2e3), start="k-means"):
@@ -257,13 +257,16 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
                 f.write("{}\n".format(info))
     n = len(log_a)
     if comp_with_hmm:
+        if type(data) != list:
             logprob = poisson_hmm([data], _path=path)
-            with open("{}info.txt".format(path), "a") as f:
-                f.write("lgprob:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm._log_p, logprob[-1], vlhmm._log_p-logprob[-1]))
-                hmm_n_params = n*(n-1) + n + (n-1)
-                hmm_aic = 2*(hmm_n_params-logprob[-1])
-                f.write("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
-                f.write("aic:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
+        else:
+            logprob = poisson_hmm(data, _path=path)
+        with open("{}info.txt".format(path), "a") as f:
+            f.write("lgprob:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm._log_p, logprob[-1], vlhmm._log_p-logprob[-1]))
+            hmm_n_params = n*(n-1) + n + (n-1)
+            hmm_aic = 2*(hmm_n_params-logprob[-1])
+            f.write("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
+            f.write("aic:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
 
 
 

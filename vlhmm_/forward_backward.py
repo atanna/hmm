@@ -40,6 +40,7 @@ class AbstractForwardBackward():
 
     def _init_emission(self, type_emission):
         if type_emission == "Poisson":
+            self.data = self.data.astype(np.int32)
             self.emission = PoissonEmission(self.data, self.X, self.n)
         else:
             self.emission = GaussianEmission(self.data, self.X, self.n)
@@ -233,13 +234,14 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         print("_init..")
         self.contexts = self.tr_trie.seq_contexts
         self.state_c = np.array(list(
-            map(lambda c: int(c[0]), self.contexts))).astype(np.int)
+            map(lambda c: int(c[0]), self.contexts))).astype(np.uint8)
         self.n_contexts = self.tr_trie.n_contexts
         self.id_c = dict(zip(self.contexts, range(self.n_contexts)))
         self.log_context_p = np.log(np.ones(self.n_contexts) / self.n_contexts)
         self.info = []
 
         super()._init(data)
+
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
         print("n_contexts:", self.n_contexts)
@@ -332,7 +334,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         print("a\n{}".format(np.round(np.exp(self.log_a), 2)))
         self._init_auxiliary_params()
         self.state_c = np.array(list(
-            map(lambda c: int(c[0]), self.contexts))).astype(np.int)
+            map(lambda c: int(c[0]), self.contexts))).astype(np.uint8)
         print(self.state_c)
         assert [int(self.contexts[i][0]) for i in range(self.n_contexts)] \
                == [self.state_c[i] for i in range(self.n_contexts)], \
@@ -386,7 +388,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
 
     def update_emission_params(self):
         self.emission.update_params(self._get_log_gamma_emission())
-        self.log_b = self.emission.get_log_b(self.data)
+        self.log_b[:] = self.emission.get_log_b(self.data)
 
     def get_n_params(self):
         n_params = self.n_contexts + self.n_contexts*(self.n-1) + \

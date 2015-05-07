@@ -89,6 +89,11 @@ class MultiVLHMM(VLHMMWang):
         print("c_p = {}".format(np.round(np.exp(self.log_context_p), 2)))
         print("a{}".format(np.round(np.exp(self.log_a), 2)))
 
+    def update_emission_params(self):
+        self.emission.update_params(self._get_log_gamma_emission())
+        for vlhmm in self.vlhmms:
+            vlhmm.log_b[:] = self.emission.get_log_b(vlhmm.data)
+
     def _prune(self, th_prune):
         res = super()._prune(th_prune)
         for vlhmm in self.vlhmms:
