@@ -194,7 +194,10 @@ class PoissonEmission(Emission):
         return "$\\lambda$ = {}".format(np.round(self.alpha[order], 1))
 
     def get_log_b(self, data):
-        return np.array([poisson.logpmf(data, alph) for alph in self.alpha]).T[0]
+        if data.ndim > 1:
+            return np.array([poisson.logpmf(data, alph) for alph in self.alpha]).T[0]
+        else:
+            return np.array([poisson.logpmf(data, alph) for alph in self.alpha]).T
 
     def log_p(self, y, state):
         return poisson.logpmf(y, self.alpha[state])

@@ -1,76 +1,51 @@
 import numpy as np
 from joblib import Parallel, delayed
-from collections import defaultdict
 from scipy.misc import logsumexp
 from vlhmm_.forward_backward import VLHMMWang
-
-
-class OneOfManyVLHMM(VLHMMWang):
-    def __init__(self, parent, data, ind):
-        self.parent = parent
-        self.ind = ind
-        self._init(data)
-        print("{}: T = {}".format(self.ind, self.T))
-
-    def _init(self, data):
-        self.n = self.parent.n
-        self.T = len(data)
-        self.data = data
-        if data.ndim < 2:
-            self.data = data[:, np.newaxis]
-        self.track_log_p = defaultdict(list)
-        self.emission = self.parent.emission
-        self.track_e_params = self.parent.track_e_params
-        self.tr_trie = self.parent.tr_trie
-        self.max_log_p_diff = self.parent.max_log_p_diff
-        self.update_contexts()
-
-    def count_ksi(self):
-        return logsumexp(self.log_ksi[:-1], axis=0)
-
-    def update_contexts(self):
-        self.n_contexts = self.parent.n_contexts
-        self.log_a = self.parent.log_a
-        self.log_b = self.emission.get_log_b(self.data)
-        self.contexts = self.parent.contexts
-        self.log_context_p = self.parent.log_context_p
-        self.state_c = self.parent.state_c
-        self.id_c = self.parent.id_c
-        self.tr_trie = self.parent.tr_trie
-        self._init_auxiliary_params()
-
-    def _e_step(self):
-        # raise NameError("e_step")
-        super()._e_step()
-        return self.log_gamma, self._log_p, self.count_ksi()
+import vlhmm_._vlhmmc as _vlhmmc
 
 
 class MultiVLHMM(VLHMMWang):
-
     def _prepare_to_fitting(self, arr_data, **_kwargs):
         kwargs = _kwargs.copy()
         self.T = sum(len(data) for data in arr_data)
         X = kwargs.pop("X", None)
         self.X = np.concatenate(X) if X is not None else None
 
-        self.data = np.concatenate(arr_data)
+        self.arr_data = arr_data
+        data = np.concatenate(arr_data)
 
-        super()._prepare_to_fitting(self.data, X=self.X, **kwargs)
+        super()._prepare_to_fitting(data, X=self.X, **kwargs)
 
-        self.n_vlhmms = len(arr_data)
-        self.vlhmms = []
-        for i, data in enumerate(arr_data):
-            self.vlhmms.append(OneOfManyVLHMM(self, data, i))
+    def _e_step_for_one_sample(self, data):
+        T = len(data)
+        log_alpha = np.log(np.zeros((T, self.n_contexts)))
+        log_beta = np.log(np.zeros((T, self.n_contexts)))
+        log_ksi = np.log(np.zeros((T, self.n, self.n_contexts)))
+        log_b = self.emission.get_log_b(data)
+
+        _vlhmmc._log_forward(self.contexts, self.log_a, log_b,
+                             self.log_context_p, self.tr_trie, self.id_c,
+                             self.state_c, log_alpha)
+
+        _log_p = logsumexp(log_alpha[-1])
+        _vlhmmc._log_backward(self.log_a, log_b, self.tr_trie.contexts,
+                              self.id_c, self.state_c, log_beta)
+
+        log_gamma = log_alpha + log_beta
+        log_gamma -= logsumexp(log_gamma, axis=1)[:, np.newaxis]
+
+        _vlhmmc._log_ksi(self.log_a, log_b, self.tr_trie.contexts,
+                         self.id_c, self.state_c, log_alpha,
+                         log_beta, log_ksi)
+        return log_gamma, _log_p, logsumexp(log_ksi[:-1], axis=0)
 
     def _e_step(self):
         log_gamma, log_p, log_sum_ksi = zip(
             *Parallel(n_jobs=-1)(
-                delayed(vlhmm._e_step)()
-                for vlhmm in self.vlhmms))
-        # log_gamma, log_p, log_sum_ksi =
-        # zip(*[vlhmm._e_step() for vlhmm in self.vlhmms])
+                delayed(self._e_step_for_one_sample)(data)
+                for data in self.arr_data))
         self.log_gamma = np.concatenate(log_gamma)
-        print("log_gamma", self.log_gamma)
         self._log_p = np.sum(log_p)
         self.track_log_p[self.n_contexts].append(self._log_p)
         self._check_diff_log_p()
@@ -91,19 +66,8 @@ class MultiVLHMM(VLHMMWang):
 
     def update_emission_params(self):
         self.emission.update_params(self._get_log_gamma_emission())
-        for vlhmm in self.vlhmms:
-            vlhmm.log_b[:] = self.emission.get_log_b(vlhmm.data)
 
-    def _prune(self, th_prune):
-        res = super()._prune(th_prune)
-        for vlhmm in self.vlhmms:
-            vlhmm.update_contexts()
-        return res
 
-    def set_canonic_view(self):
-        super().set_canonic_view()
-        for vlhmm in self.vlhmms:
-            vlhmm.emission = self.emission
-            vlhmm.update_contexts()
+
 
 

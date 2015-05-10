@@ -7,6 +7,7 @@ from scipy.cluster.vq import kmeans2
 from scipy.misc import logsumexp
 from scipy.stats.mstats import mquantiles
 from vlhmm_.context_tr_trie import ContextTransitionTrie
+# import vlhmm_._c_trie.ContextTransitionTrie as ContextTransitionTrie
 from vlhmm_.emission import GaussianEmission, PoissonEmission
 import vlhmm_._vlhmmc as _vlhmmc
 
@@ -349,8 +350,8 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.track_log_p[self.n_contexts].append(self._log_p)
 
     def log_backward(self):
-        _vlhmmc._log_backward(self.contexts, self.log_a, self.log_b,
-                             self.tr_trie, self.id_c, self.state_c, self.log_beta)
+        _vlhmmc._log_backward(self.log_a, self.log_b,
+                             self.tr_trie.contexts, self.id_c, self.state_c, self.log_beta)
 
     # def _log_gamma(self):
     #     super()._log_gamma()
@@ -359,7 +360,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     #     print("c_p = {}".format(np.round(np.exp(self.log_context_p),2)))
 
     def _log_ksi(self):
-        _vlhmmc._log_ksi(self.contexts, self.log_a, self.log_b, self.tr_trie,
+        _vlhmmc._log_ksi(self.log_a, self.log_b, self.tr_trie.contexts,
                          self.id_c, self.state_c, self.log_alpha,
                          self.log_beta, self.log_ksi)
 

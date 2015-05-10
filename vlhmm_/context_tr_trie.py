@@ -3,18 +3,6 @@ import datrie
 import numpy as np
 from pygraphviz import AGraph
 from scipy.misc import logsumexp
-# from datrie import AlphaMap
-
-
-# class PickledTrie(datrie.Trie):
-#     _alpha_map = None
-#
-#     def __init__(self, alpha_map=None):
-#         self._alpha_map = alpha_map
-#         super(PickledTrie, self).__init__(alpha_map=AlphaMap(alpha_map))
-#
-#     def __reduce__(self):
-#        return PickledTrie, (self._alpha_map, ), None, None, iter(self.items())
 
 
 class ContextTransitionTrie():
