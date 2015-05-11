@@ -69,7 +69,7 @@ def main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=None,
              max_log_p_diff=max_log_p_diff)
 
 
-def get_real_data(chr_i=1, bin_size=400, thr=10):
+def get_real_data(chr_i=1, bin_size=400, thr=10, max_len=-1):
     data = np.genfromtxt("resources/chr{}_{}.txt".format(chr_i, bin_size))
     arr_data = []
     t_start, t_fin = 0, 1
@@ -79,7 +79,11 @@ def get_real_data(chr_i=1, bin_size=400, thr=10):
                 arr_data.append(np.array(data[t_start: t_fin]))
             t_start = t_fin
         t_fin += 1
-    return arr_data
+        if max_len > 0 and len(arr_data) >= max_len:
+            break
+    _T = len(arr_data)
+    T = max_len if max_len > 0 else _T
+    return np.array(arr_data)[np.random.permutation(_T)][:T]
 
 
 def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
@@ -172,7 +176,8 @@ def go_sample_test():
     #     [[0.9462,  0.5248,  1., 0.7132],
     #      [0.0538,  0.4752,  0., 0.2868]]))
     # arr_T = [51, 51, 61, 52, 65, 58, 69]
-    n_parts = 5
+    T = int(2e3)
+    n_parts = int(T/20)
     # contexts = [""]
     # log_a = np.log(np.array(
     #     [[0.4],
@@ -183,9 +188,9 @@ def go_sample_test():
         [[0.7, 0.4, 0.2],
          [0.3, 0.6, 0.8]]
     ))
-    main_multi_vlhmm_test(contexts, log_a, T=int(4e3), arr_T=arr_T, max_len=4,
-                          max_log_p_diff=1.5,
-                          n_parts=n_parts, th_prune=0.01, start="rand",
+    main_multi_vlhmm_test(contexts, log_a, T=T, arr_T=arr_T, max_len=3,
+                          log_pr_thresh=0.5,
+                          n_parts=n_parts, th_prune=0.01, start="k-means",
                           show_e=False, alpha=alpha)
 
 
@@ -195,19 +200,19 @@ def go_real_test():
         max_len = 4
 
         max_len = 4
-        thr = 15
+        # thr = 10
         # thr = 20
+        thr = 5
         # thr = 15
-        # thr = 15
-        thr = 45
+        # thr = 45
 
-        arr_data = get_real_data(chr_i, bin_size, thr=thr)
+        arr_data = get_real_data(chr_i, bin_size, thr=thr, max_len=int(4e3))
         print(len(arr_data))
         try:
             real_test(arr_data,
                       _path="graphics4/multi/real/chr_{}/bin_size_{}/min_len_seq_{}".format(
                           chr_i, bin_size, thr),
-                      max_len=max_len, start="k-means", max_log_p_diff=1.5,
+                      max_len=max_len, start="k-means", log_pr_thresh=0.5,
                       th_prune=0.004)
         except Exception:
             continue
@@ -218,5 +223,5 @@ def go_real_test():
 
 
 if __name__ == "__main__":
-    # go_sample_test()
-    go_real_test()
+    go_sample_test()
+    # go_real_test()

@@ -1,3 +1,4 @@
+import cython
 import numpy as np
 cimport numpy as np
 from scipy.misc import logsumexp
@@ -10,6 +11,7 @@ def get_list_c(contexts, s):
         candidates = contexts.keys(s)
         return candidates
 
+@cython.boundscheck(False)
 def _log_forward(list contexts,
                  np.ndarray[np.float64_t, ndim=2] log_a,
                  np.ndarray[np.float64_t, ndim=2] log_b,
@@ -42,7 +44,7 @@ def _log_forward(list contexts,
                 tmp[i_] = log_alpha[t, i_] + log_transition
             log_alpha[t+1, i] = logsumexp(tmp) + log_b[t + 1, state_c[i]]
 
-
+@cython.boundscheck(False)
 def _log_backward(np.ndarray[np.float64_t, ndim=2] log_a,
                   np.ndarray[np.float64_t, ndim=2] log_b,
                   context_trie,
@@ -67,7 +69,7 @@ def _log_backward(np.ndarray[np.float64_t, ndim=2] log_a,
                     tmp[i_] = log_a[q, i] + log_b[t+1, q] + log_beta[t+1, i_]
             log_beta[t, i] = logsumexp(tmp)
 
-
+@cython.boundscheck(False)
 def _log_ksi(np.ndarray[np.float64_t, ndim=2] log_a,
              np.ndarray[np.float64_t, ndim=2] log_b,
              context_trie,

@@ -60,7 +60,7 @@ class AbstractForwardBackward():
         self._init(data)
         self._init_emission(type_emission)
 
-    def fit(self, data, n_iter=150, X=None, log_pr_thresh=1e-2,
+    def fit(self, data, n_iter=150, X=None, log_pr_thresh=0.15,
             start="k-means", type_emission="Poisson"):
         """
         :param data:
