@@ -142,24 +142,18 @@ class ContextTransitionTrie():
         :param s:
         :return: log_p(q|s)
         """
-        try:
-            qs = self.log_c_tr_trie.longest_prefix(q + s)
-        except KeyError:
-            qs = q + s
+        if len(self.contexts.prefixes(s)) > 0:
+            s = self.contexts.longest_prefix(s)
+        qs = q+s
         if qs in self._log_tr_trie:
             return self._log_tr_trie[qs]
         else:
-            res = self._log_sum_p(q+s)
-            denom = np.log(0.)
-            for q in self.alphabet:
-                log_sum_p_ = self._log_sum_p(q+s)
-                if np.isnan(log_sum_p_):
-                    continue
-                denom = np.logaddexp(denom, log_sum_p_)
-            assert denom > -np.inf, "q={} s={}  {}\n{}\n{}"\
-                .format(q, s, res, self.log_c_tr_trie.items(),
+            log_p_children = [self._log_sum_p(q_+s) for q_ in self.alphabet]
+            denom = logsumexp(log_p_children)
+            assert denom > -np.inf, "q={} s={}\nc_tr_trie: {}\ncontexts: {}"\
+                .format(q, s,  self.log_c_tr_trie.items(),
                         self.contexts.items())
-            res = res - denom
+            res = log_p_children[int(q)] - denom
             self._log_tr_trie[qs] = res
             return res
 

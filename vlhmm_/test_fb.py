@@ -474,11 +474,11 @@ def go_main_fb_wang_test():
     # ))
     #
     #
-    # contexts = ["00", "01", "10", "110", "111"]
-    # log_a = np.log(np.array(
-    #     [[0.8, 0.4, 0.3, 0.2, 0.9],
-    #      [0.2, 0.6, 0.7, 0.8, 0.1]]
-    # ))
+    contexts = ["00", "01", "10", "110", "111"]
+    log_a = np.log(np.array(
+        [[0.8, 0.4, 0.3, 0.2, 0.9],
+         [0.2, 0.6, 0.7, 0.8, 0.1]]
+    ))
     # contexts = ["0", "1"]
     # log_a = np.log(np.array(
     #     [[0.8, 0.4],
@@ -490,7 +490,7 @@ def go_main_fb_wang_test():
     #      [0.6]]
     # ))
     main_fb_wang_test(contexts, log_a, max_len=3, start="k-means",
-                      type_e="Poisson", T=int(1e3), th_prune=0.01, show_e=False,
+                      type_e="Poisson", T=int(4e3), th_prune=0.01, show_e=False,
                       log_pr_thresh=0.01)
 
 
