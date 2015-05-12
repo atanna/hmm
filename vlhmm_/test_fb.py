@@ -232,7 +232,8 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
 
 
 def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
-             real_e_params="unknown", max_len=4, comp_with_hmm=True, **kwargs):
+             real_e_params="unknown", max_len=4, show_res=True,
+             comp_with_hmm=True, **kwargs):
     print(path)
     vlhmm.fit(data, max_len=max_len, **kwargs)
     if T is None:
@@ -248,7 +249,6 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
                                                  vlhmm.start, comp_emission)
     fig = create_img(vlhmm, contexts, log_a, path, text)
     fig.savefig(path+'main')
-    # plt.show()
     with open("{}info.txt".format(path), "a") as f:
             f.write("\n\n")
             f.write("T={}  max_len={}\n".format(T, max_len))
@@ -268,12 +268,14 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
             f.write("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
             f.write("aic:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
 
+        if show_res:
+            plt.show()
 
 
 
 def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
                 log_pr_thresh=0.15, type_e="Poisson", start="k-means",
-                save_data=False,show_e=True, **kwargs):
+                save_data=False, show_e=True, show_res=True, **kwargs):
 
     n= len(log_a)
     h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
@@ -294,7 +296,8 @@ def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
     go_vlhmm(fb.VLHMMWang(n), data, contexts, log_a, path=path,
              real_e_params=real_e_params, max_len=max_len, start=start,
              th_prune=th_prune,
-             log_pr_thresh=log_pr_thresh, type_emission=type_e)
+             log_pr_thresh=log_pr_thresh, type_emission=type_e,
+             show_res=show_res)
 
 
 def get_data(fname="resources/ENCFF000AWF.bam", chr_i=20, bin_size=10000):
