@@ -8,6 +8,7 @@ from vlhmm_.emission import PoissonEmission
 from vlhmm_.poisson_hmm import PoissonHMM
 from vlhmm_.test_fb import create_img, data_to_file, sample_, go_vlhmm
 from vlhmm_.multi_vlhmm import MultiVLHMM
+from warnings import filterwarnings
 
 
 
@@ -79,11 +80,10 @@ def get_real_data(chr_i=1, bin_size=400, thr=10, max_len=-1):
                 arr_data.append(np.array(data[t_start: t_fin]))
             t_start = t_fin
         t_fin += 1
-        if max_len > 0 and len(arr_data) >= max_len:
-            break
     _T = len(arr_data)
     T = max_len if max_len > 0 else _T
-    return np.array(arr_data)[np.random.permutation(_T)][:T]
+    arr_data = np.array(arr_data)[np.random.permutation(_T)][:T]
+    return sorted(arr_data, key=len, reverse=True)
 
 
 def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
@@ -176,7 +176,7 @@ def go_sample_test():
     #     [[0.9462,  0.5248,  1., 0.7132],
     #      [0.0538,  0.4752,  0., 0.2868]]))
     # arr_T = [51, 51, 61, 52, 65, 58, 69]
-    T = int(2e3)
+    T = int(5e3)
     n_parts = int(T/20)
     # contexts = [""]
     # log_a = np.log(np.array(
@@ -189,7 +189,7 @@ def go_sample_test():
          [0.3, 0.6, 0.8]]
     ))
     main_multi_vlhmm_test(contexts, log_a, T=T, arr_T=arr_T, max_len=3,
-                          log_pr_thresh=0.5,
+                          log_pr_thresh=0.05,
                           n_parts=n_parts, th_prune=0.01, start="k-means",
                           show_e=False, alpha=alpha)
 
@@ -218,10 +218,8 @@ def go_real_test():
             continue
 
 
-            # poisson_hmm(arr_data, _path="graphics/multi/real/chr_{}/{}/"
-            # .format(chr_i, bin_size), text="thr={}".format(thr))
-
 
 if __name__ == "__main__":
-    go_sample_test()
-    # go_real_test()
+    filterwarnings("ignore")
+    # go_sample_test()
+    go_real_test()
