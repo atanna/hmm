@@ -344,9 +344,8 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
             [self.state_c[i] for i in range(self.n_contexts)])
 
     def log_forward(self):
-        _vlhmmc._log_forward(self.log_a, self.log_b,
-                          self.tr_trie.contexts, self.tr_trie.log_c_tr_trie,
-                          self.id_c, self.state_c, self.log_alpha)
+        _vlhmmc._log_forward(self.contexts, self.log_a, self.log_b, self.log_context_p,
+                          self.tr_trie, self.id_c, self.state_c, self.log_alpha)
         self._log_p = logsumexp(self.log_alpha[-1])
         self.track_log_p[self.n_contexts].append(self._log_p)
 
