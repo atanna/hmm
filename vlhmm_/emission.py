@@ -9,7 +9,7 @@ class Emission():
     def __init__(self, data=None, labels=None, n_states=None):
         self.n_states = n_states
         if data is None:
-            return self
+            return
         if labels is None:
             labels = [random.choice(range(n_states)) for i in range(len(data))]
         if n_states is None:
@@ -47,7 +47,7 @@ class GaussianEmission(Emission):
         self.name = "Gauss"
         super().__init__(*args, **kwargs)
 
-    def _set_params(self, mu, sigma):
+    def _set_params(self, mu=[0.], sigma=[1.]):
         self.n_states = len(mu)
         self.n = mu.shape[1]
         self.mu = mu
@@ -155,7 +155,8 @@ class PoissonEmission(Emission):
             self.set_rand_params()
             return
         self.n_states = len(alpha)
-        self.alpha = alpha
+        self.alpha = np.array(alpha)
+        return self
 
     def _init_params(self, data):
         self.alpha = np.zeros(self.n_states)

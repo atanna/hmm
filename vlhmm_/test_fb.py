@@ -267,15 +267,16 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
             hmm_aic = 2*(hmm_n_params-logprob[-1])
             f.write("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
             f.write("aic:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
+            f.write("fdr, fndr: {}\n".format(vlhmm.estimate_fdr_fndr()))
 
         if show_res:
             plt.show()
 
 
-
 def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
                 log_pr_thresh=0.15, type_e="Poisson", start="k-means",
-                save_data=False, show_e=True, show_res=True, **kwargs):
+                save_data=False, show_e=True, show_res=True, start_params=None,
+                **kwargs):
 
     n= len(log_a)
     h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
@@ -297,7 +298,7 @@ def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
              real_e_params=real_e_params, max_len=max_len, start=start,
              th_prune=th_prune,
              log_pr_thresh=log_pr_thresh, type_emission=type_e,
-             show_res=show_res)
+             show_res=show_res, start_params=start_params)
 
 
 def get_data(fname="resources/ENCFF000AWF.bam", chr_i=20, bin_size=10000):
@@ -323,10 +324,11 @@ def get_data(fname="resources/ENCFF000AWF.bam", chr_i=20, bin_size=10000):
         return x
 
 
-def test_wang_with_data_from_file(f_name, type_e="Poisson", X=None, n=3,
+def test_wang_with_data_from_file(f_name="", type_e="Poisson", X=None, n=2,
                                   max_len=3, th_prune=0.01, log_pr_thresh=0.05,
                                   start="k-means", path="graphics/real/"):
-    data = data_from_file(f_name)
+    # data = data_from_file(f_name)
+    data = np.array(list("010111001000100")).astype(np.float)
     print(len(data))
     vlhmm = fb.VLHMMWang(n)
     print(start)
@@ -343,6 +345,8 @@ def test_wang_with_data_from_file(f_name, type_e="Poisson", X=None, n=3,
                                random.randrange(100))
     print(name)
     create_img(vlhmm, name=name)
+
+# test_wang_with_data_from_file(max_len=1)
 
 # test_wang_with_data_from_file(f_name="tests/check_data.txt", n=2, max_len=2, th_prune=6e-3, start="k-means", path="tests/check/")
 # test_wang_with_data_from_file("resources/check_test.txt", n=2, max_len=3, start="k-means", path="graphics/test/check/")
@@ -474,11 +478,11 @@ def go_main_fb_wang_test():
     # ))
     #
     #
-    contexts = ["00", "01", "10", "110", "111"]
-    log_a = np.log(np.array(
-        [[0.8, 0.4, 0.3, 0.2, 0.9],
-         [0.2, 0.6, 0.7, 0.8, 0.1]]
-    ))
+    # contexts = ["00", "01", "10", "110", "111"]
+    # log_a = np.log(np.array(
+    #     [[0.8, 0.4, 0.3, 0.2, 0.9],
+    #      [0.2, 0.6, 0.7, 0.8, 0.1]]
+    # ))
     # contexts = ["0", "1"]
     # log_a = np.log(np.array(
     #     [[0.8, 0.4],
@@ -489,9 +493,24 @@ def go_main_fb_wang_test():
     #     [[0.4],
     #      [0.6]]
     # ))
+
+    # contexts = ["00", "010", "011", "1"]
+    # log_a = np.log(np.array(
+    #     [[0.7, 0.6, 0.2, 0.4],
+    #      [0.3, 0.4, 0.8, 0.6]]
+    # ))
+    contexts = ['0', '1']
+    log_a = np.log(
+    [[0.2,   0.6],
+     [0.8,   0.4]])
+    log_c_p = np.ones(len(contexts))/len(contexts)
+    alpha=[2., 23.1]
+    start_params = dict(log_a=log_a, contexts=contexts, log_c_p=log_c_p,
+                        alpha=alpha)
+    start_params=None
     main_fb_wang_test(contexts, log_a, max_len=3, start="k-means",
-                      type_e="Poisson", T=int(4e3), th_prune=0.01, show_e=False,
-                      log_pr_thresh=0.01)
+                      type_e="Poisson", T=int(1e3), th_prune=0.01, show_e=False,
+                      log_pr_thresh=0.01, alpha=alpha, start_params=start_params)
 
 
 def go_independent_parts_test(ch):

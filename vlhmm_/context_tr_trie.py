@@ -287,6 +287,8 @@ class ContextTransitionTrie():
         changed_tr = datrie.Trie(self.alphabet)
         c_to_del = datrie.Trie(self.alphabet)
         for c in self.contexts.keys():
+            if max([len(_c) for _c in self.contexts.keys(c[:-1])]) > len(c):
+                continue
             if f(c[:-1]):
                 n_prune += 1
         if n_prune == 0:

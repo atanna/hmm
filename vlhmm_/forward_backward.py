@@ -13,7 +13,7 @@ import vlhmm_._vlhmmc as _vlhmmc
 
 
 class AbstractForwardBackward():
-    def _init(self, data):
+    def _init(self, data, **kwargs):
         self.T = len(data)
         self.data = data
         if data.ndim < 2:
@@ -39,25 +39,32 @@ class AbstractForwardBackward():
     def _init_a(self):
         pass
 
-    def _init_emission(self, type_emission):
+    def _init_emission(self, type_emission, start_params=None):
         if type_emission == "Poisson":
             self.data = self.data.astype(np.int32)
-            self.emission = PoissonEmission(self.data, self.X, self.n)
+            if start_params is not None:
+                self.emission = PoissonEmission(n_states=self.n)\
+                    ._set_params(start_params["alpha"])
+            else:
+                self.emission = PoissonEmission(self.data, self.X, self.n)
         else:
             self.emission = GaussianEmission(self.data, self.X, self.n)
             print("init_mu = {}..\ninit_sigma = {}..\n".format(
                 self.emission.mu, self.emission.sigma))
         self.log_b = self.emission.get_log_b(self.data)
 
-    def _prepare_to_fitting(self, data, X=None, start="k-means", type_emission="Poisson", max_log_p_diff=1.5, **kwargs):
+    def _prepare_to_fitting(self, data, X=None, start="k-means",
+                            type_emission="Poisson", max_log_p_diff=1.5,
+                            **kwargs):
         self.start = start
         self.max_log_p_diff = max_log_p_diff
+
         if X is not None:
             self.start = "defined"
             self.X = X
         else:
             self._init_X(data, start)
-        self._init(data)
+        self._init(data, **kwargs)
         self._init_emission(type_emission)
 
     def fit(self, data, n_iter=150, X=None, log_pr_thresh=0.15,
@@ -224,8 +231,15 @@ class AbstractVLHMM():
 
 
 class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
-    def _init(self, data):
-        if self.start == "defined" or self.start == "k-means":
+    def _init(self, data, start_params=None, **kwargs):
+        self.log_context_p = None
+        if start_params is not None:
+            self.tr_trie = \
+                ContextTransitionTrie(n=self.n, max_len=self.max_len)\
+                    .recount_with_log_a(start_params["log_a"],
+                                        start_params["contexts"],
+                                        start_params["log_c_p"])
+        elif self.start == "defined" or self.start == "k-means":
             # print("X", self.X)
             self.tr_trie = ContextTransitionTrie(self.X, max_len=self.max_len,
                                                  n=self.n, start=self.start)
@@ -238,10 +252,12 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
             map(lambda c: int(c[0]), self.contexts))).astype(np.uint8)
         self.n_contexts = self.tr_trie.n_contexts
         self.id_c = dict(zip(self.contexts, range(self.n_contexts)))
-        self.log_context_p = np.log(np.ones(self.n_contexts) / self.n_contexts)
+        if self.log_context_p is None:
+            self.log_context_p = np.log(np.ones(self.n_contexts)
+                                        / self.n_contexts)
         self.info = []
 
-        super()._init(data)
+        super()._init(data, **kwargs)
 
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
@@ -259,6 +275,12 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         print(len(self.log_a))
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
+
+    def get_hidden_states(self):
+        if self.n_contexts == 1:
+            return np.zeros(self.T).astype(np.int)
+        log_gamma_ = self._get_log_gamma_emission()
+        return np.argmax(log_gamma_, axis=1)
 
     def _prepare_to_fitting(self, *args, **kwargs):
         self.max_len = kwargs.get("max_len", 3)
@@ -402,27 +424,34 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
     def get_aic(self):
         return 2*(self.get_n_params() - self._log_p)
 
-    def estimate_fdr(self, threshold):
+    def estimate_fdr_fndr(self, threshold=0.5):
         """
         H0 - state 0
         H1 - state != 0
         :return:
         """
         for i, c in enumerate(self.contexts):
-            if not c[i].startwith('0'):
+            if not c[i].startswith('0'):
                 break
         log_expectation_fp = np.log(0.)
-        expectation_p = 0.
-        for t in self.T:
+        log_expectation_fn = np.log(0.)
+        expectation_p1 = 0.
+        expectation_p0 = 0.
+        for t in range(self.T):
             log_p_0 = logsumexp(self.log_gamma[t][:i])
             log_p_1 = logsumexp(self.log_gamma[t][i:])
             log_sum = np.logaddexp(log_p_0, log_p_1)
             log_p_0, log_p_1 = log_p_0-log_sum, log_p_1-log_sum
             if np.exp(log_p_0) < threshold:
-                expectation_p += 1
+                expectation_p1 += 1
                 log_expectation_fp = np.logaddexp(log_expectation_fp, log_p_0)
+            else:
+                expectation_p0 += 1
+                log_expectation_fn = np.logaddexp(log_expectation_fn, log_p_1)
 
-        return np.exp(log_expectation_fp) / expectation_p
+        return np.exp(log_expectation_fp) / expectation_p1, \
+               np.exp(log_expectation_fn) / expectation_p0
+
 
 
     @staticmethod

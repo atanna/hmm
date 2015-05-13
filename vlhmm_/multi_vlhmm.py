@@ -52,6 +52,16 @@ class MultiVLHMM(VLHMMWang):
         super()._prepare_to_fitting(data, X=self.X, **kwargs)
         print("arr_T: {}\n".format([len(data) for data in arr_data]))
 
+    def get_hidden_states(self):
+        states = super().get_hidden_states()
+        arr_T = [len(data) for data in self.arr_data]
+        t = 0
+        res = []
+        for T in arr_T:
+            res.append(states[t: t+T])
+            t += T
+        return res
+
     def _e_step(self):
         # print("e________")
         # print(self.tr.print_diff())
@@ -77,6 +87,7 @@ class MultiVLHMM(VLHMMWang):
         self.track_log_p[self.n_contexts].append(self._log_p)
         self._check_diff_log_p()
         self.sum_ksi = logsumexp(log_sum_ksi, axis=0)
+        del log_gamma, log_p, log_sum_ksi
 
     def update_tr_params(self):
         log_sum_gamma = logsumexp(self.log_gamma, axis=0)
@@ -93,6 +104,7 @@ class MultiVLHMM(VLHMMWang):
 
     def update_emission_params(self):
         self.emission.update_params(self._get_log_gamma_emission())
+
 
 
 
