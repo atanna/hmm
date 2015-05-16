@@ -376,12 +376,6 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         _vlhmmc._log_backward(self.log_a, self.log_b,
                              self.tr_trie.contexts, self.id_c, self.state_c, self.log_beta)
 
-    # def _log_gamma(self):
-    #     super()._log_gamma()
-    #     self.log_context_p = logsumexp(self.log_gamma, axis=0)
-    #     self.log_context_p -= logsumexp(self.log_context_p)
-    #     print("c_p = {}".format(np.round(np.exp(self.log_context_p),2)))
-
     def _log_ksi(self):
         _vlhmmc._log_ksi(self.log_a, self.log_b, self.tr_trie.contexts,
                          self.id_c, self.state_c, self.log_alpha,
@@ -431,7 +425,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         :return:
         """
         for i, c in enumerate(self.contexts):
-            if not c[i].startswith('0'):
+            if not c.startswith('0'):
                 break
         log_expectation_fp = np.log(0.)
         log_expectation_fn = np.log(0.)
