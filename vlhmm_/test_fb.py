@@ -3,6 +3,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import pysam
+import time
 import vlhmm_.forward_backward as fb
 from sklearn.hmm import GaussianHMM
 from vlhmm_.context_tr_trie import ContextTransitionTrie
@@ -235,7 +236,9 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
              real_e_params="unknown", max_len=4, show_res=True,
              comp_with_hmm=True, **kwargs):
     print(path)
+    time_start = time.time()
     vlhmm.fit(data, max_len=max_len, **kwargs)
+    fit_time = time.time()-time_start
     if T is None:
         T = len(data)
     print("T=", T, "max_len=", max_len)
@@ -267,7 +270,8 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
             hmm_aic = 2*(hmm_n_params-logprob[-1])
             f.write("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
             f.write("aic:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
-            f.write("fdr, fndr: {}\n".format(vlhmm.estimate_fdr_fndr()))
+            f.write("fdr, fndr: {}\n\n".format(vlhmm.estimate_fdr_fndr()))
+            f.write("fitting time: {}\n".format(fit_time))
 
         if show_res:
             plt.show()
@@ -478,11 +482,11 @@ def go_main_fb_wang_test():
     # ))
     #
     #
-    # contexts = ["00", "01", "10", "110", "111"]
-    # log_a = np.log(np.array(
-    #     [[0.8, 0.4, 0.3, 0.2, 0.9],
-    #      [0.2, 0.6, 0.7, 0.8, 0.1]]
-    # ))
+    contexts = ["00", "01", "10", "110", "111"]
+    log_a = np.log(np.array(
+        [[0.8, 0.4, 0.3, 0.2, 0.9],
+         [0.2, 0.6, 0.7, 0.8, 0.1]]
+    ))
     # contexts = ["0", "1"]
     # log_a = np.log(np.array(
     #     [[0.8, 0.4],
@@ -494,24 +498,24 @@ def go_main_fb_wang_test():
     #      [0.6]]
     # ))
 
-    # contexts = ["00", "010", "011", "1"]
-    # log_a = np.log(np.array(
-    #     [[0.7, 0.6, 0.2, 0.4],
-    #      [0.3, 0.4, 0.8, 0.6]]
-    # ))
-    contexts = ['0', '1']
-    log_a = np.log(
-    [[0.2,   0.6],
-     [0.8,   0.4]])
+    contexts = ["00", "010", "011", "1"]
+    log_a = np.log(np.array(
+        [[0.7, 0.6, 0.2, 0.4],
+         [0.3, 0.4, 0.8, 0.6]]
+    ))
+
+    # contexts = ['0', '1']
+    # log_a = np.log(
+    # [[0.2,   0.6],
+    #  [0.8,   0.4]])
     log_c_p = np.ones(len(contexts))/len(contexts)
-    alpha=[2., 23.1]
+    alpha = [2., 23.1]
     start_params = dict(log_a=log_a, contexts=contexts, log_c_p=log_c_p,
                         alpha=alpha)
-    start_params=None
-    main_fb_wang_test(contexts, log_a, max_len=3, start="k-means",
-                      type_e="Poisson", T=int(1e3), th_prune=0.01, show_e=False,
+    start_params = None
+    main_fb_wang_test(contexts, log_a, max_len=4, start="k-means",
+                      type_e="Poisson", T=int(4e3), th_prune=0.01, show_e=False,
                       log_pr_thresh=0.01, alpha=alpha, start_params=start_params)
-
 
 def go_independent_parts_test(ch):
     chr_i = 1

@@ -1,29 +1,31 @@
 import cython
+import time
 import numpy as np
 cimport numpy as np
 from libc.math cimport exp, log
 from scipy.misc import logsumexp
-import time
 
 ctypedef np.float64_t dtype_t
-cdef dtype_t _NINF = -np.inf
+cdef dtype_t LOG_0 = -np.inf
 
 @cython.boundscheck(False)
-cdef inline dtype_t _max(np.ndarray values):
+cdef inline dtype_t _max(dtype_t[:] values):
     # find maximum value (builtin 'max' is unrolled for speed)
     cdef dtype_t value
-    cdef dtype_t vmax = _NINF
-    for value in values:
+    cdef dtype_t vmax = LOG_0
+    cdef int j
+    for j in range(values.shape[0]):
+        value = values[j]
         if value > vmax:
             vmax = value
     return vmax
 
 
 @cython.boundscheck(False)
-cdef dtype_t _logsumexp(np.ndarray[dtype_t, ndim=1] X):
+cdef dtype_t _logsumexp(dtype_t[:] X):
     cdef dtype_t vmax = _max(X)
     cdef dtype_t power_sum = 0
-
+    cdef int i
     for i in range(X.shape[0]):
         power_sum += exp(X[i] - vmax)
 
@@ -31,37 +33,108 @@ cdef dtype_t _logsumexp(np.ndarray[dtype_t, ndim=1] X):
 
 
 @cython.boundscheck(False)
-cdef inline dtype_t _max_ksi(np.ndarray[dtype_t, ndim=2] arr):
-    cdef np.ndarray[dtype_t] row
+cdef inline dtype_t _max_ksi(dtype_t[:,:] arr):
     cdef dtype_t value
-    cdef dtype_t vmax = _NINF
-    for row in arr:
-        for value in row:
+    cdef dtype_t vmax = LOG_0
+    cdef int i, j
+    for i in range(arr.shape[0]):
+        for j in range(arr.shape[1]):
+            value = arr[i,j]
             if value > vmax:
                 vmax = value
     return vmax
 
 @cython.boundscheck(False)
-cdef np.ndarray[dtype_t] _logsumexp_ksi_12(np.ndarray[dtype_t, ndim=3] log_ksi):
-    cdef np.ndarray[dtype_t] res = np.zeros(log_ksi.shape[0])
-    cdef int i
-    for i, _ksi in enumerate(log_ksi):
-        vmax = _max_ksi(_ksi)
+cdef inline void normalize_log_ksi(np.ndarray[dtype_t, ndim=3] log_ksi):
+    cdef dtype_t[:,:] _ksi_i
+    cdef int i, j, k
+    cdef dtype_t  vmax, tmp
+    for i in range(log_ksi.shape[0]):
+        _ksi_i = log_ksi[i]
+        vmax = _max_ksi(_ksi_i)
         tmp = 0.
-        for row in _ksi:
-            for value in row:
-                tmp += np.exp(value - vmax)
-        res[i] = log(tmp) + vmax
-    return res
+        for j in range(log_ksi.shape[1]):
+            for k in range(log_ksi.shape[2]):
+                tmp += exp(_ksi_i[j, k] - vmax)
+        log_ksi[i] -= (log(tmp) + vmax)
 
 
 @cython.boundscheck(False)
-cdef inline list get_list_c(contexts, s):
-    try:
-        return [contexts.longest_prefix(s)]
-    except KeyError:
-        candidates = contexts.keys(s)
-        return candidates
+def _log_forward(np.ndarray[np.uint8_t, ndim=3] mask,
+                 np.ndarray[dtype_t, ndim=2] log_a,
+                 np.ndarray[dtype_t, ndim=2] log_b,
+                 np.ndarray[dtype_t, ndim=1] log_c_p,
+                 np.ndarray[np.uint8_t, ndim=1] state_c,
+                 np.ndarray[dtype_t, ndim=2] log_alpha):
+    log_alpha.fill(LOG_0)
+    cdef int T = log_b.shape[0]
+    cdef int n = log_a.shape[0]
+    cdef int n_contexts = log_a.shape[1]
+    cdef int t, i, j, q
+    for i in range(n_contexts):
+        t = 0
+        log_alpha[t, i] = log_c_p[i] + log_b[t, state_c[i]]
+    cdef np.ndarray[dtype_t, ndim=1] tmp = np.zeros(n_contexts)
+    cdef dtype_t log_transition
+    for t in range(T - 1):
+        for i in range(n_contexts):
+            q = state_c[i]
+            for j in range(n_contexts):
+                tmp[j] = LOG_0
+                if mask[q, j, i]:
+                    log_transition = log_a[q, j]
+                    tmp[j] = log_alpha[t, j] + log_transition
+            log_alpha[t+1, i] = _logsumexp(tmp) + log_b[t + 1, q]
+
+
+@cython.boundscheck(False)
+def _log_backward(np.ndarray[np.uint8_t, ndim=3] mask,
+                  np.ndarray[dtype_t, ndim=2] log_a,
+                  np.ndarray[dtype_t, ndim=2] log_b,
+                  np.ndarray [dtype_t, ndim=2] log_beta):
+    log_beta.fill(LOG_0)
+    log_beta[-1] = np.log(1.)
+    cdef int T = log_b.shape[0]
+    cdef int n = log_a.shape[0]
+    cdef int n_contexts = log_a.shape[1]
+    cdef int t, i, j, q
+    cdef np.ndarray[dtype_t, ndim=1] tmp = np.zeros(n_contexts)
+    for t in range(T - 2, -1, -1):
+        for i in range(n_contexts):
+            for q in range(n):
+                for j in range(n_contexts):
+                    tmp[j] = LOG_0
+                    if mask[q, i, j]:
+                        tmp[j] = log_a[q, i] + log_b[t+1, q] + log_beta[t+1, j]
+            log_beta[t, i] = _logsumexp(tmp)
+
+
+@cython.boundscheck(False)
+def _log_ksi(np.ndarray[np.uint8_t, ndim=3] mask,
+             np.ndarray[dtype_t, ndim=2] log_a,
+             np.ndarray[dtype_t, ndim=2] log_b,
+             np.ndarray[dtype_t, ndim=2] log_alpha,
+             np.ndarray[dtype_t, ndim=2] log_beta,
+             np.ndarray[dtype_t, ndim=3] log_ksi):
+    cdef int T = log_b.shape[0]
+    cdef int n = log_a.shape[0]
+    cdef int n_contexts = log_a.shape[1]
+    cdef int t, i, j, q
+    cdef np.ndarray[dtype_t, ndim=1] tmp = np.zeros(n_contexts)
+    for t in range(T - 1):
+        for i in range(n_contexts):
+            for q in range(n):
+                for j in range(n_contexts):
+                    tmp[j] = LOG_0
+                    if mask[q, i, j]:
+                        tmp[j] = log_alpha[t, i] + log_a[q, i] + \
+                                  log_b[t+1, q] + log_beta[t+1, j]
+                log_ksi[t, q, i] = _logsumexp(tmp)
+    normalize_log_ksi(log_ksi)
+
+
+
+
 
 @cython.boundscheck(False)
 cdef inline dtype_t _log_sum_p(str w, contexts, log_c_tr_trie):
@@ -97,117 +170,36 @@ def log_tr_p(str q,
 
 
 @cython.boundscheck(False)
-def _log_forward(np.ndarray[dtype_t, ndim=2] log_a,
+def _log_forward_more_score_less_speed(np.ndarray[np.uint8_t, ndim=3] mask,
+                 np.ndarray[dtype_t, ndim=2] log_a,
                  np.ndarray[dtype_t, ndim=2] log_b,
+                 np.ndarray[dtype_t, ndim=1] log_c_p,
                  context_trie,
                  log_c_tr_trie,
-                 dict id_c,
                  np.ndarray[np.uint8_t, ndim=1] state_c,
                  np.ndarray[dtype_t, ndim=2] log_alpha):
-    log_alpha[:] = -np.inf
+    log_alpha.fill(LOG_0)
+    cdef int T = log_b.shape[0]
     cdef int n = log_a.shape[0]
     cdef int n_contexts = log_a.shape[1]
-    cdef int T = len(log_b)
-    cdef int i, i_, t
-    cdef str c, c_
+    cdef int t, i, j, q
+    cdef str c_
     cdef list contexts = context_trie.keys()
     for i in range(n_contexts):
         t = 0
-        log_alpha[t][i] = \
-            context_trie[contexts[i]] + \
-            log_b[t, state_c[i]]
+        log_alpha[t, i] = log_c_p[i] + log_b[t, state_c[i]]
     cdef np.ndarray[dtype_t, ndim=1] tmp = np.zeros(n_contexts)
     cdef dtype_t log_transition
     for t in range(T - 1):
-        for i, c in enumerate(contexts):
-            log_alpha[t+1, i] = np.log(0.)
-            tmp.fill(np.log(0.))
-            for c_ in get_list_c(context_trie, c[1:]):
-                i_ = id_c[c_]
-                log_transition = log_a[state_c[i], i_]
-                if len(c_) > t:
-                    log_transition = log_tr_p(c[0], c_[:t+1], context_trie,
-                                              log_c_tr_trie, n)
-                tmp[i_] = log_alpha[t, i_] + log_transition
-            log_alpha[t+1, i] = _logsumexp(tmp) + log_b[t + 1, state_c[i]]
-
-
-@cython.boundscheck(False)
-def _log_backward(np.ndarray[dtype_t, ndim=2] log_a,
-                  np.ndarray[dtype_t, ndim=2] log_b,
-                  context_trie,
-                  dict id_c,
-                  np.ndarray[np.uint8_t, ndim=1] state_c,
-                  np.ndarray [dtype_t, ndim=2] log_beta):
-    log_beta.fill(np.log(0.))
-    log_beta[-1] = np.log(1.)
-    cdef int T = len(log_b)
-    cdef int n = log_a.shape[0]
-    cdef int n_contexts = log_a.shape[1]
-    cdef int t, i, i_, q
-    cdef str c, c_
-    tmp = np.zeros(log_a.shape[1])
-    for t in range(T - 2, -1, -1):
-        for i, c in enumerate(context_trie.keys()):
-            log_beta[t][i] = np.log(0.)
-            tmp.fill(np.log(0.))
-            for q in range(n):
-                for c_ in get_list_c(context_trie, str(q) + c):
-                    i_ = id_c[c_]
-                    tmp[i_] = log_a[q, i] + log_b[t+1, q] + log_beta[t+1, i_]
-            log_beta[t, i] = _logsumexp(tmp)
-
-
-@cython.boundscheck(False)
-def _log_ksi(np.ndarray[dtype_t, ndim=2] log_a,
-             np.ndarray[dtype_t, ndim=2] log_b,
-             context_trie,
-             dict id_c,
-             np.ndarray[np.uint8_t, ndim=1] state_c,
-             np.ndarray[dtype_t, ndim=2] log_alpha,
-             np.ndarray[dtype_t, ndim=2] log_beta,
-             np.ndarray[dtype_t, ndim=3] log_ksi):
-    log_ksi.fill(np.log(0.))
-    cdef int T = len(log_b)
-    cdef int n = log_a.shape[0]
-    cdef int n_contexts = log_a.shape[1]
-    cdef int t, i, q, i_
-    cdef str c, c_
-    cdef np.ndarray[dtype_t] tmp = np.zeros(log_a.shape[1])
-    for t in range(T - 1):
-        for i, c in enumerate(context_trie.keys()):
-            for q in range(n):
-                tmp.fill(np.log(0.))
-                for c_ in get_list_c(context_trie, str(q)+c):
-                    i_ = id_c[c_]
-                    tmp[i_] = log_alpha[t, i] + log_a[q, i] + \
-                              log_b[t+1, q] + log_beta[t+1, i_]
-                log_ksi[t, q, i] = _logsumexp(tmp)
-    log_ksi -=  \
-        _logsumexp_ksi_12(log_ksi).reshape((T, 1, 1))
-
-
-
-def _test_logsumexp(X):
-    start = time.time()
-    logsumexp(X)
-    time1=time.time()-start
-
-    start = time.time()
-    _logsumexp(X)
-    time2=time.time()-start
-
-    return time1-time2, (time1, time2)
-
-
-def test_logsumexp_ksi(X):
-    start = time.time()
-    logsumexp(X, axis=(1,2))
-    time1=time.time()-start
-
-    start = time.time()
-    _logsumexp_ksi_12(X)
-    time2=time.time()-start
-
-    return time1-time2, (time1, time2)
-
+        for i in range(n_contexts):
+            q = state_c[i]
+            for j in range(n_contexts):
+                tmp[j] = LOG_0
+                c_ = contexts[j]
+                if mask[q, j, i]:
+                    log_transition = log_a[q, j]
+                    if len(c_) > t:
+                        log_transition = log_tr_p(str(q), c_[:t+1], context_trie,
+                                                  log_c_tr_trie, n)
+                    tmp[j] = log_alpha[t, j] + log_transition
+            log_alpha[t+1, i] = _logsumexp(tmp) + log_b[t + 1, q]

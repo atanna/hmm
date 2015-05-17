@@ -8,9 +8,8 @@ from vlhmm_.forward_backward import VLHMMWang
 
 
 class _Estep():
-    def _e_step_for_one_sample(self, data, log_a,
-                               id_c, state_c, context_trie, log_c_tr_trie,
-                               emission, i=-1):
+    def _e_step_for_one_sample(self, data, log_a, state_c, mask, log_context_p,
+                               emission, i=None):
         T = len(data)
         n, n_contexts = log_a.shape
         log_alpha = np.log(np.zeros((T, n_contexts)))
@@ -18,23 +17,23 @@ class _Estep():
         log_ksi = np.log(np.zeros((T, n, n_contexts)))
         log_b = emission.get_log_b(data)
 
-        _vlhmmc._log_forward(log_a, log_b,
-                             context_trie, log_c_tr_trie, id_c,
+        _vlhmmc._log_forward(mask, log_a, log_b,
+                             log_context_p,
                              state_c, log_alpha)
 
         _log_p = logsumexp(log_alpha[-1])
-        _vlhmmc._log_backward(log_a, log_b, context_trie,
-                              id_c, state_c, log_beta)
+        _vlhmmc._log_backward(mask, log_a, log_b, log_beta)
+
 
         log_gamma = log_alpha + log_beta
         log_gamma -= logsumexp(log_gamma, axis=1)[:, np.newaxis]
 
-        _vlhmmc._log_ksi(log_a, log_b, context_trie,
-                         id_c, state_c, log_alpha,
+        _vlhmmc._log_ksi(mask, log_a, log_b, log_alpha,
                          log_beta, log_ksi)
+
         log_sum_ksi = logsumexp(log_ksi[:-1], axis=0)
         del T, n, n_contexts, log_alpha, log_beta, log_ksi, log_b
-        del data, log_a, id_c, state_c, context_trie, log_c_tr_trie, emission
+        del data, log_a, mask, state_c, emission, log_context_p
         return log_gamma, _log_p, log_sum_ksi
 
 
@@ -66,14 +65,14 @@ class MultiVLHMM(VLHMMWang):
         # print("e________")
         # print(self.tr.print_diff())
         # print("___")
-
+        mask = self.get_context_mask()
         estep =_Estep()
         log_gamma, log_p, log_sum_ksi = zip(
             *Parallel(n_jobs=-1)(
                 delayed(estep._e_step_for_one_sample)(data, self.log_a,
-                                                      self.id_c, self.state_c,
-                                                      self.tr_trie.contexts,
-                                                      self.tr_trie.log_c_tr_trie,
+                                                      self.state_c,
+                                                      mask,
+                                                      self.log_context_p,
                                                       self.emission, i=i)
                 for i, data in enumerate(self.arr_data)))
 

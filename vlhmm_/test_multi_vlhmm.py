@@ -3,6 +3,7 @@ import random
 import numpy as np
 import pylab as plt
 from scipy.stats.mstats_basic import mquantiles
+import time
 from vlhmm_.context_tr_trie import ContextTransitionTrie
 from vlhmm_.emission import PoissonEmission
 from vlhmm_.poisson_hmm import PoissonHMM
@@ -107,13 +108,16 @@ def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
               _path="graphics/multi/real/", write_data=True,
               comp_with_hmm=True,
               sample_pos=None,
+              chr_i=4,
               **kwargs):
     def go(vlhmm):
         name = path
+        time_start = time.time()
         vlhmm.fit(arr_data, max_len=max_len, start=start, th_prune=th_prune,
                   log_pr_thresh=log_pr_thresh, type_emission=type_e, **kwargs)
+        fit_time = time.time() - time_start
         print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
-        print("T=", T, "max_len=", max_len)
+        print("max_len=", max_len)
         print(vlhmm.emission.get_str_params())
         print(path)
         print("aic:", vlhmm.get_aic())
@@ -137,15 +141,30 @@ def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
                 f.write("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
                 f.write("aic:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
                 f.write("fdr, fndr: {}\n".format(vlhmm.estimate_fdr_fndr()))
+                f.write("\nfitting time: {}\n".format(fit_time))
+
+
+        states = vlhmm.get_hidden_states()
 
         with open("{}peaks.txt".format(path), "wt") as f:
-            states = vlhmm.get_hidden_states()
             f.write("\npeaks_pos:\n".format())
             for i, st in enumerate(states):
                 peaks = sample_pos[i][st==1]
                 if len(peaks) > 0:
-                    f.write("{}:  len_sample={},  {}%\n{}\n\n".format(i, len(st), float(len(peaks))/len(st),
-                                                  peaks))
+                    f.write("{}:  len_sample={},  {}%\n{}\n\n"
+                            .format(i, len(st),
+                                    float(len(peaks))/len(st),
+                                    peaks))
+
+        with open("{}peaks.bed".format(path), "wt") as f:
+            for i, st in enumerate(states):
+                peaks = sample_pos[i]
+                chromStart, chromEnd = peaks[0], peaks[-1]
+                score = int(float(len(peaks[st==1]))/len(st) * 1000)
+                f.write("{} {} {} {}".format(chr_i, chromStart, chromEnd, score))
+                if score > 10:
+                    f.write("{} {} {} {}".format(chr_i,
+                                                 chromStart, chromEnd, score))
 
 
     path = "{}/{}_{}_{}/".format(_path, max_len, start, random.randrange(1e3))
@@ -206,19 +225,19 @@ def go_sample_test():
     #     [[0.9462,  0.5248,  1., 0.7132],
     #      [0.0538,  0.4752,  0., 0.2868]]))
     # arr_T = [51, 51, 61, 52, 65, 58, 69]
-    T = int(4e3)
-    n_parts = 8
+    T = int(1e4)
+    n_parts = 1
     alpha=[2.,   23.1]
     # contexts = [""]
     # log_a = np.log(np.array(
     #     [[0.4],
     #      [0.6]]
     # ))
-    contexts = ["00", "01", "1"]
-    log_a = np.log(np.array(
-        [[0.7, 0.4, 0.2],
-         [0.3, 0.6, 0.8]]
-    ))
+    # contexts = ["00", "01", "1"]
+    # log_a = np.log(np.array(
+    #     [[0.7, 0.4, 0.2],
+    #      [0.3, 0.6, 0.8]]
+    # ))
 
     # contexts = ["00", "010", "011", "1"]
     # log_a = np.log(np.array(
@@ -241,7 +260,7 @@ def go_sample_test():
     main_multi_vlhmm_test(contexts, log_a, T=T, arr_T=arr_T, max_len=4,
                           log_pr_thresh=0.05,
                           n_parts=n_parts, th_prune=0.007, start="k-means",
-                          show_e=False, _path="graphics/multi/special_sample/",
+                          show_e=False, _path="graphics/multi/sample_with_time/",
                           alpha=alpha, start_params=start_params)
 
 
@@ -250,7 +269,7 @@ def go_real_test():
         bin_size = 200
         max_len = 4
         thr = 5
-        max_num = 12000
+        max_num = 2000
         arr_data, sample_pos = get_real_data(chr_i, bin_size, thr=thr,
                                              max_num=max_num)
         print(len(arr_data))
@@ -264,12 +283,13 @@ def go_real_test():
             # start_params = dict(log_a=log_a, contexts=contexts, log_c_p=log_c_p,
             #             alpha=alpha)
             real_test(arr_data,
-                      _path="graphics_test/multi/real/chr_{}/bin_size_{}/min_len_seq_{}".format(
+                      _path="graphics_test_time/multi/real/chr_{}/bin_size_{}/min_len_seq_{}".format(
                           chr_i, bin_size, thr),
                       max_len=max_len, start="k-means", log_pr_thresh=0.5,
                       th_prune=0.004,
                       start_params=start_params,
-                      sample_pos=sample_pos)
+                      sample_pos=sample_pos,
+                      chr_i=chr_i)
         except Exception as e:
             print(e)
             continue
