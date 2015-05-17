@@ -45,7 +45,7 @@ cdef inline dtype_t _max_ksi(dtype_t[:,:] arr):
     return vmax
 
 @cython.boundscheck(False)
-cdef inline void normalize_log_ksi(np.ndarray[dtype_t, ndim=3] log_ksi):
+cdef void normalize_log_ksi(np.ndarray[dtype_t, ndim=3] log_ksi):
     cdef dtype_t[:,:] _ksi_i
     cdef int i, j, k
     cdef dtype_t  vmax, tmp
@@ -56,7 +56,10 @@ cdef inline void normalize_log_ksi(np.ndarray[dtype_t, ndim=3] log_ksi):
         for j in range(log_ksi.shape[1]):
             for k in range(log_ksi.shape[2]):
                 tmp += exp(_ksi_i[j, k] - vmax)
-        log_ksi[i] -= (log(tmp) + vmax)
+        tmp = (log(tmp) + vmax)
+        for j in range(log_ksi.shape[1]):
+            for k in range(log_ksi.shape[2]):
+                log_ksi[i,j,k] -= tmp
 
 
 @cython.boundscheck(False)
@@ -93,7 +96,7 @@ def _log_backward(np.ndarray[np.uint8_t, ndim=3] mask,
                   np.ndarray[dtype_t, ndim=2] log_b,
                   np.ndarray [dtype_t, ndim=2] log_beta):
     log_beta.fill(LOG_0)
-    log_beta[-1] = np.log(1.)
+    log_beta[-1] = 0.
     cdef int T = log_b.shape[0]
     cdef int n = log_a.shape[0]
     cdef int n_contexts = log_a.shape[1]
@@ -101,9 +104,9 @@ def _log_backward(np.ndarray[np.uint8_t, ndim=3] mask,
     cdef np.ndarray[dtype_t, ndim=1] tmp = np.zeros(n_contexts)
     for t in range(T - 2, -1, -1):
         for i in range(n_contexts):
+            tmp.fill(np.log(0.))
             for q in range(n):
                 for j in range(n_contexts):
-                    tmp[j] = LOG_0
                     if mask[q, i, j]:
                         tmp[j] = log_a[q, i] + log_b[t+1, q] + log_beta[t+1, j]
             log_beta[t, i] = _logsumexp(tmp)
