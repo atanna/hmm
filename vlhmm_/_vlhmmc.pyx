@@ -9,31 +9,31 @@ ctypedef np.float64_t dtype_t
 cdef dtype_t LOG_0 = -np.inf
 
 @cython.boundscheck(False)
-cdef inline dtype_t _max(dtype_t[:] values):
+cdef inline dtype_t _max(dtype_t[:] arr) nogil:
     # find maximum value (builtin 'max' is unrolled for speed)
     cdef dtype_t value
     cdef dtype_t vmax = LOG_0
     cdef int j
-    for j in range(values.shape[0]):
-        value = values[j]
+    for j in range(arr.shape[0]):
+        value = arr[j]
         if value > vmax:
             vmax = value
     return vmax
 
 
 @cython.boundscheck(False)
-cdef dtype_t _logsumexp(dtype_t[:] X):
-    cdef dtype_t vmax = _max(X)
+cdef dtype_t _logsumexp(dtype_t[:] arr) nogil:
+    cdef dtype_t vmax = _max(arr)
     cdef dtype_t power_sum = 0
     cdef int i
-    for i in range(X.shape[0]):
-        power_sum += exp(X[i] - vmax)
+    for i in range(arr.shape[0]):
+        power_sum += exp(arr[i] - vmax)
 
     return log(power_sum) + vmax
 
 
 @cython.boundscheck(False)
-cdef inline dtype_t _max_ksi(dtype_t[:,:] arr):
+cdef inline dtype_t _max_ksi(dtype_t[:,:] arr) nogil:
     cdef dtype_t value
     cdef dtype_t vmax = LOG_0
     cdef int i, j
@@ -44,8 +44,9 @@ cdef inline dtype_t _max_ksi(dtype_t[:,:] arr):
                 vmax = value
     return vmax
 
+
 @cython.boundscheck(False)
-cdef void normalize_log_ksi(np.ndarray[dtype_t, ndim=3] log_ksi):
+cdef void normalize_log_ksi(dtype_t[:,:,:] log_ksi):
     cdef dtype_t[:,:] _ksi_i
     cdef int i, j, k
     cdef dtype_t  vmax, tmp
@@ -63,13 +64,19 @@ cdef void normalize_log_ksi(np.ndarray[dtype_t, ndim=3] log_ksi):
 
 
 @cython.boundscheck(False)
+cdef void fill(dtype_t[:] arr, dtype_t val) nogil:
+    for i in range(arr.shape[0]):
+        arr[i] = val
+
+
+
+@cython.boundscheck(False)
 def _log_forward(np.ndarray[np.uint8_t, ndim=3] mask,
                  np.ndarray[dtype_t, ndim=2] log_a,
                  np.ndarray[dtype_t, ndim=2] log_b,
                  np.ndarray[dtype_t, ndim=1] log_c_p,
                  np.ndarray[np.uint8_t, ndim=1] state_c,
                  np.ndarray[dtype_t, ndim=2] log_alpha):
-    log_alpha.fill(LOG_0)
     cdef int T = log_b.shape[0]
     cdef int n = log_a.shape[0]
     cdef int n_contexts = log_a.shape[1]
@@ -77,17 +84,19 @@ def _log_forward(np.ndarray[np.uint8_t, ndim=3] mask,
     for i in range(n_contexts):
         t = 0
         log_alpha[t, i] = log_c_p[i] + log_b[t, state_c[i]]
-    cdef np.ndarray[dtype_t, ndim=1] tmp = np.zeros(n_contexts)
+    cdef dtype_t[:] tmp = np.zeros(n_contexts)
     cdef dtype_t log_transition
-    for t in range(T - 1):
-        for i in range(n_contexts):
-            q = state_c[i]
-            for j in range(n_contexts):
-                tmp[j] = LOG_0
-                if mask[q, j, i]:
-                    log_transition = log_a[q, j]
-                    tmp[j] = log_alpha[t, j] + log_transition
-            log_alpha[t+1, i] = _logsumexp(tmp) + log_b[t + 1, q]
+
+    with nogil:
+        for t in range(T - 1):
+            for i in range(n_contexts):
+                q = state_c[i]
+                for j in range(n_contexts):
+                    tmp[j] = LOG_0
+                    if mask[q, j, i]:
+                        log_transition = log_a[q, j]
+                        tmp[j] = log_alpha[t, j] + log_transition
+                log_alpha[t+1, i] = _logsumexp(tmp) + log_b[t + 1, q]
 
 
 @cython.boundscheck(False)
@@ -95,21 +104,21 @@ def _log_backward(np.ndarray[np.uint8_t, ndim=3] mask,
                   np.ndarray[dtype_t, ndim=2] log_a,
                   np.ndarray[dtype_t, ndim=2] log_b,
                   np.ndarray [dtype_t, ndim=2] log_beta):
-    log_beta.fill(LOG_0)
     log_beta[-1] = 0.
     cdef int T = log_b.shape[0]
     cdef int n = log_a.shape[0]
     cdef int n_contexts = log_a.shape[1]
     cdef int t, i, j, q
-    cdef np.ndarray[dtype_t, ndim=1] tmp = np.zeros(n_contexts)
-    for t in range(T - 2, -1, -1):
-        for i in range(n_contexts):
-            tmp.fill(np.log(0.))
-            for q in range(n):
-                for j in range(n_contexts):
-                    if mask[q, i, j]:
-                        tmp[j] = log_a[q, i] + log_b[t+1, q] + log_beta[t+1, j]
-            log_beta[t, i] = _logsumexp(tmp)
+    cdef dtype_t[:] tmp = np.zeros(n_contexts)
+    with nogil:
+        for t in range(T - 2, -1, -1):
+            for i in range(n_contexts):
+                fill(tmp, LOG_0)
+                for q in range(n):
+                    for j in range(n_contexts):
+                        if mask[q, i, j]:
+                            tmp[j] = log_a[q, i] + log_b[t+1, q] + log_beta[t+1, j]
+                log_beta[t, i] = _logsumexp(tmp)
 
 
 @cython.boundscheck(False)
@@ -123,16 +132,17 @@ def _log_ksi(np.ndarray[np.uint8_t, ndim=3] mask,
     cdef int n = log_a.shape[0]
     cdef int n_contexts = log_a.shape[1]
     cdef int t, i, j, q
-    cdef np.ndarray[dtype_t, ndim=1] tmp = np.zeros(n_contexts)
-    for t in range(T - 1):
-        for i in range(n_contexts):
-            for q in range(n):
-                for j in range(n_contexts):
-                    tmp[j] = LOG_0
-                    if mask[q, i, j]:
-                        tmp[j] = log_alpha[t, i] + log_a[q, i] + \
-                                  log_b[t+1, q] + log_beta[t+1, j]
-                log_ksi[t, q, i] = _logsumexp(tmp)
+    cdef dtype_t[:] tmp = np.zeros(n_contexts)
+    with nogil:
+        for t in range(T - 1):
+            for i in range(n_contexts):
+                for q in range(n):
+                    for j in range(n_contexts):
+                        tmp[j] = LOG_0
+                        if mask[q, i, j]:
+                            tmp[j] = log_alpha[t, i] + log_a[q, i] + \
+                                      log_b[t+1, q] + log_beta[t+1, j]
+                    log_ksi[t, q, i] = _logsumexp(tmp)
     normalize_log_ksi(log_ksi)
 
 
@@ -206,3 +216,29 @@ def _log_forward_more_score_less_speed(np.ndarray[np.uint8_t, ndim=3] mask,
                                                   log_c_tr_trie, n)
                     tmp[j] = log_alpha[t, j] + log_transition
             log_alpha[t+1, i] = _logsumexp(tmp) + log_b[t + 1, q]
+
+
+
+def e_step(np.ndarray[np.uint8_t] mask,
+           np.ndarray[dtype_t, ndim=2] log_a,
+           np.ndarray[dtype_t, ndim=2] log_b,
+           np.ndarray[dtype_t, ndim=1] log_context_p,
+           np.ndarray[np.uint8_t, ndim=1] state_c):
+    cdef int T = log_b.shape[0]
+    cdef int n = log_a.shape[0]
+    cdef int n_contexts = log_a.shape[1]
+    log_alpha = np.log(np.zeros((T, n_contexts)))
+    log_beta = np.log(np.zeros((T, n_contexts)))
+    log_ksi = np.log(np.zeros((T, n, n_contexts)))
+
+    _log_forward(mask, log_a, log_b, log_context_p, state_c, log_alpha)
+    _log_backward(mask, log_a, log_b, log_beta)
+    _log_ksi(mask, log_a, log_b, log_alpha, log_beta, log_ksi)
+
+    _log_p = logsumexp(log_alpha[-1])
+    log_gamma = log_alpha + log_beta
+    log_gamma -= logsumexp(log_gamma, axis=1)[:, np.newaxis]
+    log_sum_ksi = logsumexp(log_ksi[:-1], axis=0)
+
+    return log_gamma, _log_p, log_sum_ksi
+
