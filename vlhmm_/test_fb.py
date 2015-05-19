@@ -279,14 +279,17 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
 
 def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
                 log_pr_thresh=0.15, type_e="Poisson", start="k-means",
-                save_data=False, show_e=True, show_res=True, start_params=None,
+                save_data=False, show_e=True, show_res=True,
+                data=None, start_params=None,
                 **kwargs):
 
-    n= len(log_a)
-    h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
-    data, emission = sample_(T, n, list(map(int, h_states)),
+    n = len(log_a)
+    real_e_params = "unknown"
+    if data is None:
+        h_states = ContextTransitionTrie.sample_(T, contexts, log_a)
+        data, emission = sample_(T, n, list(map(int, h_states)),
                              type_emission=type_e, **kwargs)
-    real_e_params = emission.get_str_params()
+        real_e_params = emission.get_str_params()
     print("real emission:\n{}".format(real_e_params))
     path = "graphics/vlhmm2/{}/".format(random.randrange(T))
     if not os.path.exists(path):
@@ -498,11 +501,11 @@ def go_main_fb_wang_test():
     #      [0.6]]
     # ))
 
-    contexts = ["00", "010", "011", "1"]
-    log_a = np.log(np.array(
-        [[0.7, 0.6, 0.2, 0.4],
-         [0.3, 0.4, 0.8, 0.6]]
-    ))
+    # contexts = ["00", "010", "011", "1"]
+    # log_a = np.log(np.array(
+    #     [[0.7, 0.6, 0.2, 0.4],
+    #      [0.3, 0.4, 0.8, 0.6]]
+    # ))
 
     # contexts = ['0', '1']
     # log_a = np.log(
@@ -513,8 +516,10 @@ def go_main_fb_wang_test():
     start_params = dict(log_a=log_a, contexts=contexts, log_c_p=log_c_p,
                         alpha=alpha)
     start_params = None
-    main_fb_wang_test(contexts, log_a, max_len=4, start="k-means",
+    data = data_from_file("tests/data")
+    main_fb_wang_test(contexts, log_a, max_len=4, start="equal",
                       type_e="Poisson", T=int(4e3), th_prune=0.01, show_e=False,
+                      data=data,
                       log_pr_thresh=0.01, alpha=alpha, start_params=start_params)
 
 def go_independent_parts_test(ch):

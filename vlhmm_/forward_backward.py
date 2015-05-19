@@ -8,6 +8,7 @@ from scipy.stats.mstats import mquantiles
 from vlhmm_.context_tr_trie import ContextTransitionTrie
 from vlhmm_.emission import GaussianEmission, PoissonEmission
 import vlhmm_._vlhmmc as _vlhmmc
+import vlhmm_._vlhmmc_old as _vlhmmc_old
 
 
 class AbstractForwardBackward():
@@ -184,7 +185,7 @@ class AbstractVLHMM():
                 centre, labels = kmeans2(data, self.n)
             except TypeError:
                 labels = np.random.choice(range(self.n), len(data))
-        else:
+        elif start == "equal":
             labels = np.random.choice(range(self.n), len(data))
 
         self.X = "".join(list(map(str, labels)))
@@ -225,6 +226,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
 
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
+        self.mask = self.get_context_mask()
         print("n_contexts:", self.n_contexts)
         print("contexts: {}".format(self.contexts))
         print("a: \n{}".format(np.round(np.exp(self.log_a), 2)))
@@ -310,6 +312,7 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         self.n_contexts = n_contexts
         self.id_c = id_c
         self.log_a = self.tr_trie.count_log_a()
+        self.mask = self.get_context_mask()
         if n_contexts == 1:
             return
         print("a\n{}".format(np.round(np.exp(self.log_a), 2)))
@@ -338,10 +341,6 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         _vlhmmc._log_ksi(self.mask,
                          self.log_a, self.log_b, self.log_alpha,
                          self.log_beta, self.log_ksi)
-
-    def _e_step(self, ):
-        self.mask = self.get_context_mask()
-        super()._e_step()
 
     def get_context_mask(self):
         mask = np.zeros((self.n, self.n_contexts, self.n_contexts)).astype(np.uint8)
