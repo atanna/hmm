@@ -87,8 +87,8 @@ class MultiVLHMM(VLHMMWang):
                 for i, data in enumerate(self.arr_data)))
 
 
-        print("collect:", gc.collect())
-        print("garbage:", gc.garbage)
+        # print("collect:", gc.collect())
+        # print("garbage:", gc.garbage)
         # print(self.tr.print_diff())
 
         self.log_gamma = np.concatenate(log_gamma)

@@ -31,7 +31,9 @@ def main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=None,
                           start="k-means",
                           save_data=False, show_e=True,
                           _path="graphics/multi/sample/",
-                          start_params=None, **e_params):
+                          start_params=None,
+                          lang_plot="en",
+                          **e_params):
     n = len(log_a)
     real_e_params = "unknown"
     if arr_data is None:
@@ -74,7 +76,8 @@ def main_multi_vlhmm_test(contexts, log_a, T=int(1e3), arr_T=None,
              th_prune=th_prune,
              log_pr_thresh=log_pr_thresh, type_emission=type_e,
              max_log_p_diff=max_log_p_diff,
-             start_params=start_params)
+             start_params=start_params,
+             lang_plot=lang_plot)
 
 
 def get_real_data(chr_i=1, bin_size=400, thr=10, max_num=-1):
@@ -119,6 +122,7 @@ def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
               chr_i=4,
               bin_size=200,
               sample_params=None,
+              lang_plot='ru',
               **kwargs):
     def go(vlhmm):
         name = path
@@ -131,7 +135,7 @@ def real_test(arr_data, max_len=4, th_prune=6e-3, log_pr_thresh=0.01,
         print(vlhmm.emission.get_str_params())
         print(path)
         print("aic:", vlhmm.get_aic())
-        create_img(vlhmm, name=name)
+        create_img(vlhmm, name=name, language=lang_plot)
         with open("{}info.txt".format(path), "a") as f:
             # f.write("\nemission: {}\n".format(vlhmm.emission.get_str_params()))
             # f.write("contexts: {}\n".format(vlhmm.contexts))
@@ -262,8 +266,9 @@ def go_sample_test():
                           log_pr_thresh=0.05,
                           arr_data=arr_data,
                           n_parts=n_parts, th_prune=0.007, start="k-means",
-                          show_e=False, _path="graphics/multi/sample_with_time/",
-                          alpha=alpha, start_params=start_params)
+                          show_e=False, _path="ru/multi/",
+                          alpha=alpha, start_params=start_params,
+                          lang_plot="ru")
 
 
 def go_real_test():
@@ -286,7 +291,7 @@ def go_real_test():
             # start_params = dict(log_a=log_a, contexts=contexts, log_c_p=log_c_p,
             #             alpha=alpha)
             real_test(arr_data,
-                      _path="graphics_H3K4me3/multi/real/chr_{}/bin_size_{}/min_len_seq_{}".format(
+                      _path="ru/real/H3K4me3/chr_{}/bin_size_{}/min_len_seq_{}".format(
                           chr_i, bin_size, thr),
                       max_len=max_len, start="k-means", log_pr_thresh=0.5,
                       th_prune=0.004,
@@ -295,7 +300,8 @@ def go_real_test():
                       chr_i=chr_i,
                       bin_size=bin_size,
                       sample_params=sample_params,
-                      max_log_p_diff=5.)
+                      max_log_p_diff=5.,
+                      lang_plot='ru')
         except Exception as e:
             print(e)
             continue

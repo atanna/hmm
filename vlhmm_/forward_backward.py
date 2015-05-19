@@ -8,7 +8,6 @@ from scipy.stats.mstats import mquantiles
 from vlhmm_.context_tr_trie import ContextTransitionTrie
 from vlhmm_.emission import GaussianEmission, PoissonEmission
 import vlhmm_._vlhmmc as _vlhmmc
-import vlhmm_._vlhmmc_old as _vlhmmc_old
 
 
 class AbstractForwardBackward():
@@ -141,7 +140,15 @@ class AbstractForwardBackward():
         else:
             print()
 
-    def plot_log_p(self):
+    def plot_log_p(self, language="en"):
+        if language == "ru":
+            s_log_p="Логарифм правдоподобия"
+            s_iterations="итераций"
+            s_n_contexts="Число контекстов"
+        else:
+            s_log_p='log_p'
+            s_iterations='iterations'
+            s_n_contexts='n_contexts'
         fig = plt.figure()
 
         l = len(self.track_log_p)
@@ -156,15 +163,15 @@ class AbstractForwardBackward():
 
         for i, n_context in enumerate(keys):
             ax = fig.add_subplot(1, l, i + 1)
-            ax.set_title("n_contexts = {}".format(n_context))
+            ax.set_title("{} = {}".format(s_n_contexts, n_context))
             if i == 0:
-                ax.set_ylabel('log_p')
+                ax.set_ylabel(s_log_p)
             num = len(self.track_log_p[n_context])
             if self.emission.name == "Poisson":
-                ax.set_xlabel("{} iterations\n{}"
-                              .format(num, self.track_e_params[n_context]))
+                ax.set_xlabel("{} {}\n{}"
+                              .format(num, s_iterations, self.track_e_params[n_context]))
             else:
-                ax.set_xlabel("{} iterations".format(num))
+                ax.set_xlabel("{} {}".format(s_iterations, num))
             ax.plot(range(num), self.track_log_p[n_context], 'bo', range(num),
                     self.track_log_p[n_context], 'k')
             ax.set_ylim(min_y, max_y)
@@ -268,12 +275,17 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         return self
 
     def _prune(self, th_prune):
-        self.info.append("{} {}\nc_p: {}\na: {}\n{}\nlog_p: {}\naic: {}\n\n" \
+        info = "{} {}\nc_p: {}\na: {}\n{}\nlog_p: {}\naic: {}\n{hmm_aic}\n" \
                          .format(self.n_contexts, self.contexts,
                                  np.round(np.exp(self.log_context_p), 3),
                                  np.round(np.exp(self.log_a), 2),
                                  self.emission.get_str_params(),
-                                 self._log_p, self.get_aic()))
+                                 self._log_p, self.get_aic(),
+                                 hmm_aic="hmm_aic: {}".format(self.get_aic(True))
+                                                if len(self.info) == 0
+                                                else "")
+        self.info.append(info)
+
         self.track_e_params[self.n_contexts] = self.emission.get_str_params()
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
@@ -388,13 +400,15 @@ class VLHMMWang(AbstractVLHMM, AbstractForwardBackward):
         return np.argmax(log_gamma_, axis=1)
 
     def get_n_params(self):
-        n_params = self.n_contexts + self.n_contexts * (self.n - 1) + \
+        n_params = 1 + self.n_contexts * (self.n - 1) + \
                    self.emission.get_n_params() + (self.n_contexts - 1)
         # contexts, transition params,
         # emission params, start distribution (pi=log_context_p)
         return n_params
 
-    def get_aic(self):
+    def get_aic(self, hmm=False):
+        if hmm:
+            return 2 * (self.get_n_params() - 1 - self._log_p)
         return 2 * (self.get_n_params() - self._log_p)
 
     def estimate_fdr_fndr(self, threshold=0.5):

@@ -5,11 +5,9 @@ import matplotlib.pyplot as plt
 import pysam
 import time
 import vlhmm_.forward_backward as fb
-from sklearn.hmm import GaussianHMM
 from vlhmm_.context_tr_trie import ContextTransitionTrie
-from hmm_.hmm import HMMModel, HMM
+from hmm_.hmm import HMMModel
 from vlhmm_.emission import GaussianEmission, PoissonEmission
-# import vlhmm_.test_multi_vlhmm.poisson_hmm as poisson_hmm
 from vlhmm_.poisson_hmm import PoissonHMM
 
 
@@ -21,20 +19,8 @@ def data_from_file(f_name):
     return np.genfromtxt(f_name)
 
 
-def get_mixture(n, n_components=3):
-    X = np.zeros((n_components * n, 2))
-    _var = 10.
-    for i in range(n_components):
-        mean = ([random.randrange(_var / 2),
-                 random.randrange(_var / 2)] + np.random.random((2,))) * _var
-        cov = np.random.random((2, 2)) * _var
-        print("mean, cov", mean, cov)
-        x, y = np.random.multivariate_normal(mean, cov, n).T
-        X[n * i:n * (i + 1)] = np.c_[x, y]
-    return np.random.permutation(X)
-
-
-def sample_(size, n=2, h_states=None, type_emission="Poisson", emission=None, **e_params):
+def sample_(size, n=2, h_states=None, type_emission="Poisson", emission=None,
+            **e_params):
     if h_states is None:
         model_ = HMMModel.get_random_model(n, n)
         data, h_states = model_.sample(size)
@@ -61,52 +47,6 @@ def sample_(size, n=2, h_states=None, type_emission="Poisson", emission=None, **
     return data, emission
 
 
-def test_sklearn(data, n=2, n_iter=5):
-    hmm = GaussianHMM(n_components=n, n_iter=n_iter)
-    hmm.fit([data])
-    print("sklearn GaussianHMM:")
-    print("a", np.exp(hmm._log_transmat))
-    print("mu", hmm.means_)
-    log_p =hmm.score(data)
-    print("score", log_p)
-    return log_p
-
-
-def test_wang_mixture():
-
-    def go(vlhmm):
-        vlhmm.fit(data, max_len=3, n_iter=5)
-        print(vlhmm.tr_trie.contexts)
-
-    T = 200
-    n = 2
-    data = get_mixture(T, n_components=n)
-    go(fb.VLHMMWang(n))
-    plt.show()
-
-
-def test_wang_with_hmm_sample():
-    def go(vlhmm):
-        vlhmm.fit(data, max_len=5, n_iter=15, th_prune=4e-2)
-        print(vlhmm.tr_trie.n_contexts, vlhmm.tr_trie.seq_contexts)
-        print("sklearn: {}\nvlhmm: {}".format(sk_log_p, vlhmm._log_p))
-        print("T=", T)
-
-
-    n, m, T = 2, 2, int(3e3)
-    a = np.array([[0.2, 0.8],
-                  [0.6, 0.4]])
-    b = np.array([[0.1, 0.9],
-                  [0.2, 0.8]])
-
-
-    model_ = HMMModel.get_model_from_real_prob(a, b)
-    data, h_states = model_.sample(T)
-    data = sample_(T, n, h_states)
-
-    sk_log_p = test_sklearn(data, n)
-    go(fb.VLHMMWang(n))
-
 def poisson_hmm(arr_data, _path, text=""):
     hmm = PoissonHMM(n_components=2)
     logprob, _ = hmm.fit(arr_data)
@@ -120,84 +60,34 @@ def poisson_hmm(arr_data, _path, text=""):
     return logprob
 
 
-def test_hmm(type_e="Poisson", T=int(2e3), start="k-means"):
-    def go(vlhmm):
-        vlhmm.fit(data, equal_start=start, type_emission=type_e)
-        if type_e == "Gauss":
-            print("sklearn: {}\nvlhmm: {}".format(sk_log_p, vlhmm._log_p))
-        print("real_a", np.exp(model_.log_a))
-        name = "graphics/hmm/{}/{}_{}".format(type_e, start, random.randrange(T))
-        print(name)
-        text = "{}\nT = {}\ninit: {}\n".format(type_e, T, start)
-        vlhmm.contexts = ["0", "1"]
-        fig = create_img(vlhmm, vlhmm.contexts, vlhmm.log_a, name, text)
-        fig.savefig(name+".jpg")
-
-        print(type_e)
-        print(T)
-
-
-        print(name)
-        fig.savefig(name)
-        plt.show()
-
-
-
-    n, m = 2, 2
-    a = np.array([[0.2, 0.8],
-                  [0.6, 0.4]])
-    b = np.array([[0.1, 0.9],
-                  [0.2, 0.8]])
-
-
-    model_ = HMMModel.get_model_from_real_prob(a, b)
-    model_ = HMMModel.get_random_model(2, 1)
-    _, h_states = model_.sample(T)
-
-    data = sample_(T, n, h_states, type_emission=type_e)
-    print("data:", data)
-
-    if type_e == "Gauss":
-        sk_log_p = test_sklearn(data, n, 100)
-
-    go(fb.HMM(n))
-
-
-def test_discrete_hmm():
-    n, m, T = 3, 2, int(3e2)
-    n_iter = 8
-    model = HMMModel.get_random_model(n, m)
-    print(model)
-    data, h_states = model.sample(T)
-
-    hmm = fb.DiscreteHMM(n).fit(data, n_iter+1)
-    print(hmm.model)
-
-    print(HMM(n).observation_log_probability(hmm.model, data))
-    print()
-
-    log_p, optimal_model, h_opt_states = HMM(n).optimal_model(data, m=m,
-                                                              max_iter=n_iter)
-    print("hmm:\n{}\n{}".format(optimal_model, log_p))
-
-
-def connect_tries(fname_real_trie, fname_trie, name):
+def connect_tries(fname_real_trie, fname_trie, name, s_real_trie, s_predicted_trie):
     fig, (ax0, ax1) = plt.subplots(ncols=2)
 
     ax0.imshow(plt.imread(fname_real_trie))
-    ax0.set_title('Real tree')
+    ax0.set_title(s_real_trie)
     ax0.axis('off')
 
     ax1.imshow(plt.imread(fname_trie))
-    ax1.set_title('Predicted tree')
+    ax1.set_title(s_predicted_trie)
     ax1.axis('off')
 
     fig.savefig(name)
 
 
-def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
+def create_img(vlhmm, contexts=None, log_a=None, name="", text="",
+               language="en"):
+
+    if language == "ru":
+        s_log_likelihood = "Логарифм правдоподобия"
+        s_real_trie = "Реальное\nдерево"
+        s_predicted_trie = "Предсказанное\nдерево"
+    else:
+        s_log_likelihood = "Log likelihood"
+        s_real_trie = "Real tree"
+        s_predicted_trie = "Predicted tree"
+
     fname_plot = name+"plot_.png"
-    vlhmm.plot_log_p().savefig(fname_plot)
+    vlhmm.plot_log_p(language=language).savefig(fname_plot)
     fname_trie = name+"trie_.png"
     ContextTransitionTrie.draw_context_trie(vlhmm.contexts, vlhmm.log_a,
                                             fname_trie)
@@ -207,15 +97,17 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
         ContextTransitionTrie.draw_context_trie(contexts, log_a,
                                                 fname_real_trie)
 
-        connect_tries(fname_real_trie, fname_trie, name+"tries.png")
+        connect_tries(fname_real_trie, fname_trie, name+"tries.png",
+                      s_real_trie=s_real_trie,
+                      s_predicted_trie=s_predicted_trie)
         fig = plt.figure()
 
         ax = plt.subplot2grid((3, 4), (0, 0), colspan=4, rowspan=2)
-        ax.set_title("Log likelihood")
+        ax.set_title(s_log_likelihood)
         ax1 = plt.subplot2grid((3, 4), (2, 1))
-        ax1.set_title("Real tree")
+        ax1.set_title(s_real_trie)
         ax2 = plt.subplot2grid((3, 4), (2, 2))
-        ax2.set_title("Predicted tree")
+        ax2.set_title(s_predicted_trie)
 
         ax.imshow(plt.imread(fname_plot))
         ax1.imshow(plt.imread(fname_real_trie))
@@ -234,7 +126,7 @@ def create_img(vlhmm, contexts=None, log_a=None, name="", text=""):
 
 def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
              real_e_params="unknown", max_len=4, show_res=True,
-             comp_with_hmm=True, **kwargs):
+             comp_with_hmm=True, lang_plot='en', **kwargs):
     print(path)
     time_start = time.time()
     vlhmm.fit(data, max_len=max_len, **kwargs)
@@ -250,7 +142,7 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
     print(path)
     text = "{}\nT = {}\ninit: {}\n\n{}\n".format(vlhmm.emission.name, T,
                                                  vlhmm.start, comp_emission)
-    fig = create_img(vlhmm, contexts, log_a, path, text)
+    fig = create_img(vlhmm, contexts, log_a, path, text, language=lang_plot)
     fig.savefig(path+'main')
     with open("{}info.txt".format(path), "a") as f:
             f.write("\n\n")
@@ -266,7 +158,7 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
             logprob = poisson_hmm(data, _path=path)
         with open("{}info.txt".format(path), "a") as f:
             f.write("lgprob:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm._log_p, logprob[-1], vlhmm._log_p-logprob[-1]))
-            hmm_n_params = n*(n-1) + n + (n-1)
+            hmm_n_params = n*n + n -1
             hmm_aic = 2*(hmm_n_params-logprob[-1])
             f.write("params: vlhmm={} hmm={}\n".format(vlhmm.get_n_params(), hmm_n_params))
             f.write("aic:\nvlhmm = {},  hmm = {}   diff= {}\n".format(vlhmm.get_aic(), hmm_aic, vlhmm.get_aic()-hmm_aic))
@@ -278,9 +170,10 @@ def go_vlhmm(vlhmm, data, contexts, log_a, path="", T=None,
 
 
 def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
-                log_pr_thresh=0.15, type_e="Poisson", start="k-means",
+                log_pr_thresh=0.15, _path="graphics/vlhmm2/",
+                type_e="Poisson", start="k-means",
                 save_data=False, show_e=True, show_res=True,
-                data=None, start_params=None,
+                data=None, start_params=None, lang_plot='en',
                 **kwargs):
 
     n = len(log_a)
@@ -291,7 +184,7 @@ def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
                              type_emission=type_e, **kwargs)
         real_e_params = emission.get_str_params()
     print("real emission:\n{}".format(real_e_params))
-    path = "graphics/vlhmm2/{}/".format(random.randrange(T))
+    path = "{}{}/".format(_path, random.randrange(T))
     if not os.path.exists(path):
             os.makedirs(path)
     if show_e:
@@ -305,7 +198,9 @@ def main_fb_wang_test(contexts, log_a, T=int(2e3), max_len=4, th_prune=4e-3,
              real_e_params=real_e_params, max_len=max_len, start=start,
              th_prune=th_prune,
              log_pr_thresh=log_pr_thresh, type_emission=type_e,
-             show_res=show_res, start_params=start_params)
+             show_res=show_res,
+             lang_plot=lang_plot,
+             start_params=start_params)
 
 
 def get_data(fname="resources/ENCFF000AWF.bam", chr_i=20, bin_size=10000):
@@ -517,10 +412,13 @@ def go_main_fb_wang_test():
                         alpha=alpha)
     start_params = None
     data = data_from_file("tests/data")
-    main_fb_wang_test(contexts, log_a, max_len=4, start="equal",
+    main_fb_wang_test(contexts, log_a, max_len=4, start="k-means",
                       type_e="Poisson", T=int(4e3), th_prune=0.01, show_e=False,
                       data=data,
-                      log_pr_thresh=0.01, alpha=alpha, start_params=start_params)
+                      _path="ru/vlhmm/",
+                      log_pr_thresh=0.01, alpha=alpha,
+                      start_params=start_params,
+                      lang_plot="ru")
 
 def go_independent_parts_test(ch):
     chr_i = 1
