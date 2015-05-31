@@ -44,15 +44,26 @@
 % Поля настраиваются командами \newgeometry во время и после генерации титульных 
 % страниц и 
 \usepackage[a4paper]{geometry}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\theoremstyle{remark}
+\newtheorem{remark}{Замечание}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Определение}
 
 \usepackage{fancyhdr}
 \usepackage{ifthen}
+
+\usepackage{fancyvrb}
+\usepackage{color}
 %% Мы используем компилятор XeLaTex, который дружит с Unicode и True Type/Open Type
 %% шрифтами. Для русификации достаточно подключить пакет fontspec и
 %% выбрать Unicode шрифт в котором есть кириллические глифы. Ниже
 %% основным шрифтом выбирается Unicode версия шрифта Computer Modern с заcечками
 \usepackage{fontspec}
 \setmainfont[Mapping=tex-text]{CMU Serif}
+\setmonofont{DejaVu Sans Mono}
 
 %% В XeLaTex заменой известного пакета babel является пакет polyglossia.
 %% Теперь у нас будут переносы слов
