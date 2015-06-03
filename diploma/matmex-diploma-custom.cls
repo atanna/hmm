@@ -51,6 +51,9 @@
 
 \theoremstyle{definition}
 \newtheorem{definition}{Определение}
+\usepackage[]{algorithm2e}
+
+\usepackage{array}
 
 \usepackage{fancyhdr}
 \usepackage{ifthen}
