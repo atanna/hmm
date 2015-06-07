@@ -58,7 +58,7 @@
 \usepackage[]{algorithm2e}
 \usepackage{csquotes}
 \newcommand*{\defeq}{\mathrel{\mathop:}=}
-
+\usepackage{amsfonts}
 \usepackage{array}
 
 \usepackage{fancyhdr}
