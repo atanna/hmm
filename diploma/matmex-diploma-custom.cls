@@ -43,6 +43,10 @@
 
 % Поля настраиваются командами \newgeometry во время и после генерации титульных 
 % страниц и 
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+
 \usepackage[a4paper]{geometry}
 \usepackage{amsthm}
 \usepackage{amsmath}
@@ -53,6 +57,7 @@
 \newtheorem{definition}{Определение}
 \usepackage[]{algorithm2e}
 \usepackage{csquotes}
+\newcommand*{\defeq}{\mathrel{\mathop:}=}
 
 \usepackage{array}
 
