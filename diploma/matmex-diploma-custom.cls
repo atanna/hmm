@@ -52,6 +52,7 @@
 \theoremstyle{definition}
 \newtheorem{definition}{Определение}
 \usepackage[]{algorithm2e}
+\usepackage{csquotes}
 
 \usepackage{array}
 
