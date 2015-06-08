@@ -1,7 +1,0 @@
-
-
-class HMMException(Exception):
-    pass
-
-
-

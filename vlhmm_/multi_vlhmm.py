@@ -1,10 +1,9 @@
 import gc
 import numpy as np
-import vlhmm_._vlhmmc as _vlhmmc
-from pympler import tracker
+import _vlhmmc as _vlhmmc
 from joblib import Parallel, delayed
 from scipy.misc import logsumexp
-from vlhmm_.forward_backward import VLHMMWang
+from vlhmm import VLHMM
 
 
 class _Estep():
@@ -32,11 +31,8 @@ class _Estep():
 
         _log_p = logsumexp(log_alpha[-1])
 
-
-
         log_gamma = log_alpha + log_beta
         log_gamma -= logsumexp(log_gamma, axis=1)[:, np.newaxis]
-
 
         log_sum_ksi = logsumexp(log_ksi[:-1], axis=0)
         del T, n, n_contexts, log_alpha, log_beta, log_ksi, log_b
@@ -44,7 +40,7 @@ class _Estep():
         return log_gamma, _log_p, log_sum_ksi
 
 
-class MultiVLHMM(VLHMMWang):
+class MultiVLHMM(VLHMM):
     def _prepare_to_fitting(self, arr_data, **_kwargs):
         kwargs = _kwargs.copy()
         self.T = sum(len(data) for data in arr_data)
@@ -53,10 +49,8 @@ class MultiVLHMM(VLHMMWang):
 
         self.arr_data = arr_data
         data = np.concatenate(arr_data)
-        # self.tr = tracker.SummaryTracker()
 
         super()._prepare_to_fitting(data, X=self.X, **kwargs)
-        print("arr_T: {}\n".format([len(data) for data in arr_data]))
 
     def get_hidden_states(self):
         states = super().get_hidden_states()
@@ -64,19 +58,16 @@ class MultiVLHMM(VLHMMWang):
         t = 0
         res = []
         for T in arr_T:
-            res.append(states[t: t+T])
+            res.append(states[t: t + T])
             t += T
         return res
 
     def _e_step(self):
-        # print("e________")
-        # print(self.tr.print_diff())
-        # print("___")
         self.mask = self.get_context_mask()
 
-        estep =_Estep()
+        estep = _Estep()
         log_gamma, log_p, log_sum_ksi = zip(
-            *Parallel(n_jobs=-1, backend='threading')(
+            *Parallel(n_jobs=1, backend='threading')(
                 delayed(estep._e_step_for_one_sample)(data,
                                                       self.log_a,
                                                       self.state_c,
@@ -85,11 +76,6 @@ class MultiVLHMM(VLHMMWang):
                                                       self.emission,
                                                       i=i)
                 for i, data in enumerate(self.arr_data)))
-
-
-        # print("collect:", gc.collect())
-        # print("garbage:", gc.garbage)
-        # print(self.tr.print_diff())
 
         self.log_gamma = np.concatenate(log_gamma)
         self._log_p = np.sum(log_p)
@@ -108,14 +94,9 @@ class MultiVLHMM(VLHMMWang):
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
 
-        print("c_p = {}".format(np.round(np.exp(self.log_context_p), 2)))
-        print("a{}".format(np.round(np.exp(self.log_a), 2)))
+        if self._print:
+            print("c_p = {}".format(np.round(np.exp(self.log_context_p), 2)))
+            print("a{}".format(np.round(np.exp(self.log_a), 2)))
 
     def update_emission_params(self):
         self.emission.update_params(self._get_log_gamma_emission())
-
-
-
-
-
-
