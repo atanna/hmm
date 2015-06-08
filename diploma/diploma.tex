@@ -515,20 +515,22 @@ $$B = \{\textit{Poisson}(\lambda=2), \textit{Poisson}(\lambda=10)\}$$.
     \label{table_mixture}
 \end{center}
 \begin{figure}[h!]\centering
-\begin{minipage}[b]{0.49 \textwidth}
-	\includegraphics[scale=0.57]{img/sample_mixture/real_trie_.png}
+\begin{subfigure}[b]{0.49 \textwidth}
+	\includegraphics[scale=0.50]{img/sample_mixture/real_trie_.png}
 	\centering
 	\caption{ Реальное дерево }
 	\label{fig:sample_mixture_real_trie}
 	
-\end{minipage}
+\end{subfigure}
 \hfil \hfil%раздвигаем боксы по горизонтали
-\begin{minipage}[b]{0.49 \textwidth}
-	\includegraphics[scale=0.57]{img/sample_mixture/predicted_trie.png}
+\begin{subfigure}[b]{0.49 \textwidth}
+	\includegraphics[scale=0.50]{img/sample_mixture/predicted_trie.png}
 	\centering
 	\caption{ Предсказанное дерево }
 	\label{fig:sample_mixture_predicted_trie}
-\end{minipage}
+\end{subfigure}
+\caption{ Пуассоновская смесь }
+\label{fig:sample_mixture}
 \end{figure}
 
 \subsubsection{СММ}
@@ -548,29 +550,32 @@ $$B = \{\textit{Poisson}(\lambda=1), \textit{Poisson}(\lambda=8)\}$$.
     \label{table_hmm1}
 \end{center}
 
-На рисунке \ref{fig:sample_hmm1_log_likelihood} изображен график обучения. Каждая EM-часть выделена контуром, сверху которого написано число контекстов на момент обучения, снизу количество итераций в этой части и параметры распределения испусканий, полученных на последней итерации, внутри --- график логарифма правдоподобия по итерациям EM. 
-На такой схеме видно, как сначала алгоритм 6 итераций EM обучался на 16 контекстах, после чего дерево подрезалось до 2 контекстов. Следующему EM не удалось значимо увеличить правдоподобие модели, поэтому на третей итерации он закончил работу. Далее дерево не удалось подрезать, поэтому весь алгоритм закончил свою работу (это видно из отсутствия следующего контура под график ЕM).
 \begin{figure}[h!]\centering
-\begin{minipage}[b]{0.49 \textwidth}
-	\includegraphics[scale=0.4]{img/sample_hmm1/real_trie_.png}
+\begin{subfigure}[b]{0.49 \textwidth}
+	\includegraphics[scale=0.35]{img/sample_hmm1/real_trie_.png}
 	\centering
 	\caption{ Реальное дерево }
 	\label{fig:sample_hmm1_real_trie}
-\end{minipage}
+\end{subfigure}
 \hfil \hfil%раздвигаем боксы по горизонтали
-\begin{minipage}[b]{0.49 \textwidth}
-	\includegraphics[scale=0.4]{img/sample_hmm1/predicted_trie.png}
+\begin{subfigure}[b]{0.49 \textwidth}
+	\includegraphics[scale=0.35]{img/sample_hmm1/predicted_trie.png}
 	\centering
 	\caption{ Предсказанное дерево }
 	\label{fig:sample_hmm1_predicted_trie}
-\end{minipage}
-\begin{minipage}[b]{0.8 \textwidth}
-	\includegraphics[scale=0.4]{img/sample_hmm1/plot_.png}
+\end{subfigure}
+\begin{subfigure}[b]{0.8 \textwidth}
+	\includegraphics[scale=0.38]{img/sample_hmm1/plot_.png}
 	\centering
 	\caption{ График обучения }
 	\label{fig:sample_hmm1_log_likelihood}
-\end{minipage}
+\end{subfigure}
+\caption{ СММ }
+\label{fig:sample_hmm1}
 \end{figure}
+
+На рисунке \ref{fig:sample_hmm1_log_likelihood} изображен график обучения. Каждая EM-часть выделена контуром, сверху которого написано число контекстов на момент обучения, снизу количество итераций в этой части и параметры распределения испусканий, полученных на последней итерации, внутри --- график логарифма правдоподобия по итерациям EM. 
+На такой схеме видно, как сначала алгоритм 6 итераций EM обучался на 16 контекстах, после чего дерево подрезалось до 2 контекстов. Следующему EM не удалось значимо увеличить правдоподобие модели, поэтому на третей итерации он закончил работу. Далее дерево не удалось подрезать, поэтому весь алгоритм закончил свою работу (это видно из отсутствия следующего контура под график ЕM).
 
 \subsubsection{СММПП, не являющаяся СММ фиксированного порядка}
 Модель СММПП была выбрана с параметрами переходов, изображенных контекстным деревом на рисунке \ref{fig:sample_vlhmm_real_trie} и параметрами испусканий
@@ -591,26 +596,28 @@ $$B = \{\textit{Poisson}(\lambda=3), \textit{Poisson}(\lambda=15)\}$$.
 \end{center}
 
 \begin{figure}[h!]\centering
-\begin{minipage}[b]{0.49 \textwidth}
+\begin{subfigure}[b]{0.49 \textwidth}
 	\includegraphics[scale=0.3]{img/sample/real_trie_.png}
 	\centering
 	\caption{ Реальное дерево }
 	\label{fig:sample_vlhmm_real_trie}
 	
-\end{minipage}
+\end{subfigure}
 \hfil \hfil%раздвигаем боксы по горизонтали
-\begin{minipage}[b]{0.49 \textwidth}
+\begin{subfigure}[b]{0.49 \textwidth}
 	\includegraphics[scale=0.3]{img/sample/predicted_trie.png}
 	\centering
 	\caption{ Предсказанное дерево }
 	\label{fig:sample_vlhmm_predicted_trie}
-\end{minipage}
-\begin{minipage}[b]{0.8 \textwidth}
-	\includegraphics[scale=0.4]{img/sample/plot_.png}
+\end{subfigure}
+\begin{subfigure}[b]{0.8 \textwidth}
+	\includegraphics[scale=0.38]{img/sample/plot_.png}
 	\centering
 	\caption{ График обучения }
 	\label{fig:sample_vlhmm_log_likelihood}
-\end{minipage}
+\end{subfigure}
+\caption{ СММПП, не являющаяся СММ фиксированного порядка }
+\label{fig:sample_vlhmm}
 \end{figure}
 
 \subsection{Применение к реальным данным}
@@ -630,52 +637,56 @@ $m = 5$, $\epsilon_{\textit{prune}} = 0.04$, $\epsilon_{\textit{em}} = 0.05$
 Полученное контекстное дерево переходов для скрытого слоя состояний, отвечающих за ДНК-белковую связь проиллюстрировано на рисунке \ref{fig:real_trie}. Из него видно каким образом наличие взаимодействия с белком в фиксированном окне генома определяется взаимодействиями в предшествующих окнах.
 
 \begin{figure}[h!]\centering
-\begin{minipage}[b]{0.49 \textwidth}
+\begin{subfigure}[b]{0.49 \textwidth}
 	\includegraphics[scale=0.47]{img/real/plot_.png}
 	\centering
 	\caption{ График обучения }
 	\label{fig:log_likelihood}
-\end{minipage}
+\end{subfigure}
 \hfill
-\begin{minipage}[b]{0.32 \textwidth}
+\begin{subfigure}[b]{0.32 \textwidth}
 	\includegraphics[scale=0.29]{img/real/predicted_trie.png}
 	\centering
 	\caption{ Контекстноe дерево }
 	\label{fig:real_trie}
-\end{minipage}
+\end{subfigure}
+\caption{СММПП на реальных данных}
+\label{fig:real}
 \end{figure}
 
 \begin{figure}[h!]\centering
-\begin{minipage}[b]{0.32 \textwidth}
+\begin{subfigure}[b]{0.32 \textwidth}
 	\includegraphics[scale=0.28]{img/real/log_p.png}
 	\centering
 	\caption{ Сравнение логарифма правдоподобия}
 	\label{fig:real_comp_log_p}
-\end{minipage}
+\end{subfigure}
 \hfill
-\begin{minipage}[b]{0.32 \textwidth}
+\begin{subfigure}[b]{0.32 \textwidth}
 	\includegraphics[scale=0.28]{img/real/aic.png}
 	\centering
 	\caption{ Сравнение критерия Акаике }
 	\label{fig:real_comp_aic}
-\end{minipage}
+\end{subfigure}
 \hfill
-\begin{minipage}[b]{0.32 \textwidth}
+\begin{subfigure}[b]{0.32 \textwidth}
 	\includegraphics[scale=0.28]{img/real/time.png}
 	\centering
 	\caption{ Сравнение времени обучения }
 	\label{fig:real_comp_time}
-\end{minipage}
+\end{subfigure}
+\caption{ Сравнение моделей СММПП, СММ5 (СММ 5-го порядка, соответствует дереву, с которого начиналось обучение СММПП), СММ (СММ 1-го порядка, именно его чаще всего используют для анализа данных ChIP-seq) }
+\label{fig:real_comp}
 \end{figure}
 
-Ниже представлено сравнение логарифма правдоподобия (рис. \ref{fig:real_comp_log_p}), критерия Акаике (рис. \ref{fig:real_comp_aic}) и времени обучения (рис. \ref{fig:real_comp_time}) для моделей СММПП, СММ5 (СММ 5-го порядка, соответствует дереву, с которого начиналось обучение СММПП) и СММ (СММ 1-го порядка, именно его чаще всего используют для анализа данных ChIP-seq).
+Ниже представлено сравнение логарифма правдоподобия (рис. \ref{fig:real_comp_log_p}), критерия Акаике (рис. \ref{fig:real_comp_aic}) и времени обучения (рис. \ref{fig:real_comp_time}) для моделей СММПП, СММ5 и СММ.
 
-По критерию Акакике выигрывает СММПП (напомним, что данный критерий, чем меньше, тем лучше).
+По критерию Акакике (рис. \ref{fig:real_comp_aic}) выигрывает СММПП (напомним, что данный критерий, чем меньше, тем лучше).
 
-СММ5 имеет лучшее среди этих трех моделей правдоподобие, однако ее губит большое количество параметров. 
+СММ5 имеет лучшее среди этих трех моделей правдоподобие (рис. \ref{fig:real_comp_log_p}), однако ее губит большое количество параметров. 
 СММ имеет меньшее среди данных моделей количество параметров, однако ее правдоподобие совсем невелико.
-
-Рисунок \ref{fig:real_trie} показывает сравнение времени обучения. Тут СММПП дает похожий результат с СММ5, немного ей уступая. СММ, в силу простоты структуры, обучается быстрее всех.
+ 
+Время обучения СММПП (рис. \ref{fig:real_trie}) дает схожий результат с СММ5, немного ей уступая. СММ, в силу простоты структуры, обучается быстрее всех.
 
 
 \section*{Заключение}
