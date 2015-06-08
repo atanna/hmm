@@ -46,6 +46,7 @@
 \usepackage{graphicx}
 \usepackage{caption}
 \usepackage{subcaption}
+\renewcommand{\thesubfigure}{\asbuk{subfigure}}
 
 \usepackage[a4paper]{geometry}
 \usepackage{amsthm}
