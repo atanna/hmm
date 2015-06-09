@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pylab as plt
 from collections import defaultdict
@@ -5,8 +6,8 @@ from functools import reduce
 from scipy.cluster.vq import kmeans2
 from scipy.misc import logsumexp
 from scipy.stats.mstats import mquantiles
-from context_tr_trie import ContextTransitionTrie
-from emission import GaussianEmission, PoissonEmission
+from vlhmm_.context_tr_trie import ContextTransitionTrie
+from vlhmm_.emission import GaussianEmission, PoissonEmission
 import time
 import _vlhmmc as _vlhmmc
 
@@ -143,7 +144,7 @@ class AbstractForwardBackward():
                 print("diff {:.4}".format(diff))
                 if diff < 0:
                     print("- " * 50)
-            assert diff + max_log_p_diff > 0
+            assert diff + max_log_p_diff > 0, "diff={}".format(diff)
         else:
             if self._print:
                 print()
@@ -527,3 +528,26 @@ class VLHMM(AbstractVLHMM, AbstractForwardBackward):
             fname_real_trie = "{}real_trie.{}".format(name, extension)
             ContextTransitionTrie.draw_context_trie(real_contexts, real_log_a,
                                                     fname_real_trie)
+
+    def save_fitting_info(self, real_contexts=None, real_log_a=None,
+                          real_e_params="unknown", path="", lang_plot='ru',
+                          **kwargs):
+        if not os.path.exists(path):
+            os.makedirs(path)
+        self.create_img(real_contexts, real_log_a, path, language=lang_plot)
+
+        with open("{}info.txt".format(path), "wt") as f:
+            f.write("params:\n")
+            f.write("max_len={max_len}\n".format(
+                max_len=self.max_len))
+            f.write("{}\n\n".format(kwargs))
+            if real_contexts is not None:
+                f.write("real_params:\ncontexts: {}\na:\n{}\nemission: {}\n\n"
+                        .format(real_contexts, np.round(np.exp(real_log_a), 3),
+                                real_e_params))
+            f.write("fitting:\n")
+            for i, info in enumerate(self.info):
+                f.write("EM_{}:\n{}\n".format(i, info))
+            f.write("\n")
+            f.write("fdr, fndr: {}\n\n".format(self.estimate_fdr_fndr()))
+            f.write("fitting time: {}\n".format(self.fit_time))

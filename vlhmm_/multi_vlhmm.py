@@ -1,10 +1,9 @@
-import gc
 import numpy as np
-import _vlhmmc as _vlhmmc
+import vlhmm_._vlhmmc as _vlhmmc
 from joblib import Parallel, delayed
 from scipy.misc import logsumexp
-from vlhmm import VLHMM
-from emission import PoissonEmission, GaussianEmission
+from vlhmm_.vlhmm import VLHMM
+from vlhmm_.emission import PoissonEmission, GaussianEmission
 
 
 class _Estep():
