@@ -258,8 +258,8 @@ class VLHMM(AbstractVLHMM, AbstractForwardBackward):
         self.max_len = kwargs.get("max_len", 3)
         super()._prepare_to_fitting(*args, **kwargs)
 
-    def fit(self, data, n_iter=75, th_prune=8e-3,
-            log_pr_thresh=0.15, **kwargs):
+    def fit(self, data, n_iter=75, th_prune=0.007, log_pr_thresh=0.05,
+            **kwargs):
         """
         :param data:
         :param n_iter:
@@ -500,10 +500,8 @@ class VLHMM(AbstractVLHMM, AbstractForwardBackward):
         if emission is None:
             if type_emission == "Poisson":
                 emission = PoissonEmission(n_states=n)
-                data = np.zeros(size)
             else:
                 emission = GaussianEmission(n_states=n)
-                data = np.zeros((size, 2))
 
             if len(e_params) > 0:
                 emission._set_params(**e_params)

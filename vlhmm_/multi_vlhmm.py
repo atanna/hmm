@@ -4,6 +4,7 @@ import _vlhmmc as _vlhmmc
 from joblib import Parallel, delayed
 from scipy.misc import logsumexp
 from vlhmm import VLHMM
+from emission import PoissonEmission, GaussianEmission
 
 
 class _Estep():
@@ -62,12 +63,18 @@ class MultiVLHMM(VLHMM):
             t += T
         return res
 
+    def fit(self, data, parallel_params=dict(n_jobs=-1, backend='threading'),
+            **kwargs):
+        self.parallel_params = parallel_params
+        super().fit(data, **kwargs)
+        return self
+
     def _e_step(self):
         self.mask = self.get_context_mask()
 
         estep = _Estep()
         log_gamma, log_p, log_sum_ksi = zip(
-            *Parallel(n_jobs=1, backend='threading')(
+            *Parallel(**self.parallel_params)(
                 delayed(estep._e_step_for_one_sample)(data,
                                                       self.log_a,
                                                       self.state_c,
@@ -100,3 +107,25 @@ class MultiVLHMM(VLHMM):
 
     def update_emission_params(self):
         self.emission.update_params(self._get_log_gamma_emission())
+
+    @staticmethod
+    def sample_(arr_sizes, contexts, log_a, type_emission="Poisson", emission=None,
+                **e_params):
+        n = len(log_a)
+        if emission is None:
+            if type_emission == "Poisson":
+                emission = PoissonEmission(n_states=n)
+            else:
+                emission = GaussianEmission(n_states=n)
+
+            if len(e_params) > 0:
+                emission._set_params(**e_params)
+            else:
+                emission.set_rand_params()
+
+        vlhmm = VLHMM(n)
+        vlhmm.set_params(contexts, log_a, emission)
+
+        arr_data = [vlhmm.sample(size) for size in arr_sizes]
+        return arr_data, emission
+
