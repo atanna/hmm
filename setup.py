@@ -4,6 +4,6 @@ from Cython.Distutils import build_ext
 
 setup(
     cmdclass={'build_ext': build_ext},
-    ext_modules=[Extension("_vlhmmc", ["_vlhmmc.pyx"])]
+    ext_modules=[Extension("vlhmm_/_vlhmmc", ["vlhmm_/_vlhmmc.pyx"])]
 )
 
