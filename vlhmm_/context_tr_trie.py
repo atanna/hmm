@@ -270,6 +270,12 @@ class ContextTransitionTrie():
             size)
 
     def prune(self, K=1e-4):
+        prune = False
+        while self.prune_(K):
+            prune = True
+        return prune
+
+    def prune_(self, K):
         def f(s):
             if s in used:
                 return False

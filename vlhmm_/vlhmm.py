@@ -295,15 +295,12 @@ class VLHMM(AbstractVLHMM, AbstractForwardBackward):
         self.track_e_params[self.n_contexts] = self.emission.get_str_params()
         self.tr_trie.recount_with_log_a(self.log_a, self.contexts,
                                         self.log_context_p)
-        prune = False
-        while self.tr_trie.prune(th_prune):
-            if self._print:
-                print("prune")
-                print(self.tr_trie.seq_contexts)
+
+        prune = self.tr_trie.prune(th_prune)
+        if prune:
             self.update_contexts()
-            if self.n_contexts == 1:
-                return False
-            prune = True
+        if self.n_contexts == 1:
+            return False
         return prune
 
     def update_contexts(self):

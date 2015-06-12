@@ -78,7 +78,7 @@ def run_real_test():
                        max_n_samples=8000,
                        protein=protein)
     arr_data, sample_pos = get_real_data(**data_params)
-    path = "results/{}/chr_{}/bin_size_{}/".format(protein, chr_i, bin_size)
+    path = "test_results/{}/chr_{}/bin_size_{}/".format(protein, chr_i, bin_size)
 
     real_test(arr_data,
               path=path,
