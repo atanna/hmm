@@ -1,5 +1,5 @@
 ## Скрытые Марковские Модели Переменного Порядка (СММПП)
-#### Variable Length Markov Models (VLHMM)
+#### Variable Length Hidden Markov Models (VLHMM)
 
 Репозиторий содержит два модуля *vlhmm*, *chipseq*
 * *vlhmm* включает в себя инструменты для решения следующих задач:
