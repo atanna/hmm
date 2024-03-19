@@ -49,6 +49,7 @@ _ _ _
 ![alt text](https://raw.githubusercontent.com/atanna/hmm/master/diploma/img/Context_trie.png)
     4. Variable length Markov chain  
 ![alt text](https://raw.githubusercontent.com/atanna/hmm/master/diploma/img/Prune_c_trie.png)
+
 *Context transition tree defines a variable leghth Markov stochastic process.
 
 ##### VLHMM
