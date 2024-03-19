@@ -1,59 +1,57 @@
-## Скрытые Марковские Модели Переменного Порядка (СММПП)
-#### Variable Length Hidden Markov Models (VLHMM)
+## Variable Length Hidden Markov Models (VLHMM)
 
-Репозиторий содержит два модуля *vlhmm*, *chipseq*
-* *vlhmm* включает в себя инструменты для решения следующих задач:
-    * построение, обучение, отрисовка контекстных деревьев переходов
-    * построение, обучение СММПП, графическое представление результатов
-* *chipseq* позволяет решить следующие задачи:
-    * применение СММПП к данным ChIp-seq
-    * создание файлов для просмотра результатов в геномном браузере http://genome.ucsc.edu/
+The repository concludes two modules *vlhmm*, *chipseq*, which can solve next problems:
+* *vlhmm*:
+    * building, training, plotting context transition tree
+    * building, training VLHMM
+* *chipseq*:
+    * applying VLHMM to ChIp-seq data
+    * conversion for genome browser fromat http://genome.ucsc.edu/
 
+Language: Python 3.x
 
-Язык: Python 3.x
-
-Зависимости:
+Dependencies:
 * Cython
 * NumPy, SciPy
 * Pylab
 * datrie
 * PyGraphviz
 
-Инсталляция:
+Instalation:
 
     git clone https://github.com/atanna/hmm.git
 
-Компиляция Cython-файлов:
+Cython-files compilation:
 
     python setup.py build_ext --inplace
 ___
-## Примеры
-Директория `vlhmm_/examples/` содержит примеры тестов, иллюстрирующих обучение СММПП и контекстных деревьев на симулированных данных.
+## Examples
+The directory `vlhmm_/examples/` concludes test examples with training VLHMM and context trees on simulated data.
 
-`chipseq/real_test.py` иллюстрирует пример работы СММПП на данных ChIP-seq эксперимента
+`chipseq/real_test.py` shows example VLHMM on ChIP-seq data
 _ _ _
-## Суть
-##### Контекстные деревья переходов
-* Контекстное дерево переходов задает случайный процесс.
-* Контекст состояния процесса -- любой префикс из предшествующих состояний (процесс движется справа налево, т.е. состояния идут по убыванию времени).
-* Вершина ~ контекст.
-* Ребро ~ состояние.
-* Исходящая степень внутренней вершины -- число состояний.
-* Лист задает распределение текущего состояния.
-* ###### Примеры
-    1. "Неравновероятная монетка"<br>
+## Description
+##### Context transition tree
+* Context transition tree defines a stochastic process.
+* Context state -- any preffix from previous states (the process moves from right to left, i.e. states go in descending order of time).
+* Vertex ~ context.
+* Edge ~ state.
+* Outdegree of internal vertex -- number of states.
+* The leaf defines the distribution of the current state.
+* ###### Examples
+    1. "Unfair Coin"<br>
 ![alt text](https://raw.githubusercontent.com/atanna/hmm/master/diploma/img/sample_mixture/real_trie_.png)
 
-    2. Марковский процесс<br>
+    2. Markov chain<br>
 ![alt text](https://raw.githubusercontent.com/atanna/hmm/master/diploma/img/sample_hmm1/real_trie_.png)
 
-    3. Марковский процесс второрго порядка<br>
+    3. Second-order Markov chain<br>
 ![alt text](https://raw.githubusercontent.com/atanna/hmm/master/diploma/img/Context_trie.png)
-    4. Марковский процесс переменного порядка (эквивалентно 3.)
+    4. Variable length Markov chain  
 ![alt text](https://raw.githubusercontent.com/atanna/hmm/master/diploma/img/Prune_c_trie.png)
-* Контекстное дерево переходов задает Марковский процесс переменного порядка.
+*Context transition tree defines a variable leghth Markov stochastic process.
 
-##### СММПП
-* Аналогичны СММ.
-* Скрытый слой задается Марковским процессом переменного порядка (контекстным деревом переходов)
+##### VLHMM
+* The same as HMM.
+* Hidden layer is defined by variable leghth Markov stochastic process (which we can define by context transition tree).
 
